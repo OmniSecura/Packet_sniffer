@@ -5,6 +5,7 @@
 #include <pcap.h>
 #include <stdio.h>
 #include <string>
+#include <stdint.h>
 #include <netinet/in.h>
 
 // -------------------------------------------------------------------------
@@ -22,6 +23,67 @@ struct sniff_ethernet {    // IEEE: 802.3
 struct sniff_dot1q {       // IEEE: 802.1Q
     u_short tci;         // Tag Control Info (VLAN ID, priority)
     u_short ether_type;  // Next Ethertype after VLAN
+};
+
+struct sniff_qinq {        // IEEE: 802.1ad (Q-in-Q)
+    struct sniff_dot1q outer_tag; // Service VLAN tag
+    struct sniff_dot1q inner_tag; // Customer VLAN tag
+};
+
+struct sniff_llc {         // IEEE: 802.2 Logical Link Control
+    uint8_t  dsap;        // Destination Service Access Point
+    uint8_t  ssap;        // Source Service Access Point
+    uint8_t  control;     // Control field (I/S/U format)
+};
+
+struct sniff_snap {        // Subnetwork Access Protocol header
+    uint8_t  oui[3];      // Organizationally Unique Identifier
+    uint16_t protocol_id; // Protocol identifier (Ethertype)
+};
+
+struct sniff_token_ring {  // IEEE: 802.5 Token Ring
+    uint8_t  access_control;
+    uint8_t  frame_control;
+    uint8_t  dest_addr[6];
+    uint8_t  src_addr[6];
+};
+
+struct sniff_fddi {        // ANSI: X3T9.5 FDDI
+    uint8_t  frame_control;
+    uint8_t  dest_addr[6];
+    uint8_t  src_addr[6];
+};
+
+struct sniff_ppp {         // RFC: 1661 (Point-to-Point Protocol)
+    uint8_t  address;     // Usually 0xFF
+    uint8_t  control;     // Usually 0x03
+    uint16_t protocol;    // Protocol field (PPP Protocol IDs)
+};
+
+struct sniff_pppoe_discovery { // RFC: 2516 (PPPoE Discovery stage)
+    uint8_t  ver_type;    // Version (4 bits) | Type (4 bits)
+    uint8_t  code;        // PPPoE Code (PADI, PADO, etc.)
+    uint16_t session_id;  // Must be zero in discovery stage
+    uint16_t length;      // Length of payload
+};
+
+struct sniff_pppoe_session {   // RFC: 2516 (PPPoE Session stage)
+    uint8_t  ver_type;    // Version (4 bits) | Type (4 bits)
+    uint8_t  code;        // Should be 0x00 during session
+    uint16_t session_id;  // Session identifier
+    uint16_t length;      // Length of PPP payload
+};
+
+struct sniff_cdp {         // Cisco Discovery Protocol
+    uint8_t  version;
+    uint8_t  ttl;
+    uint16_t checksum;
+    // Followed by TLV entries
+};
+
+struct sniff_lldp {        // IEEE: 802.1AB Link Layer Discovery Protocol
+    uint16_t tlv_type_length; // Type (7 bits) | Length (9 bits)
+    uint8_t  value[1];        // Placeholder for TLV value (variable length)
 };
 
 struct sniff_arp {         // RFC: 826
@@ -111,6 +173,17 @@ struct sniff_icmp {        // RFC: 792
     uint16_t icmp_seq;
 };
 
+struct sniff_icmp_timestamp { // RFC: 792 (Timestamp message)
+    uint8_t  type;        // 13 = Timestamp, 14 = Timestamp Reply
+    uint8_t  code;        // Zero
+    uint16_t checksum;    // Checksum
+    uint16_t id;          // Identifier
+    uint16_t seq;         // Sequence number
+    uint32_t originate_timestamp;
+    uint32_t receive_timestamp;
+    uint32_t transmit_timestamp;
+};
+
 struct sniff_icmpv6 {      // RFC: 4443
     uint8_t  icmp6_type;
     uint8_t  icmp6_code;
@@ -157,6 +230,43 @@ struct sniff_igmpv3_report { // RFC: 3376 (Membership Report)
     // Followed by sniff_igmpv3_record entries
 };
 
+struct sniff_rip {         // RFC: 2453 (Routing Information Protocol v2)
+    uint8_t  command;      // 1=Request, 2=Response
+    uint8_t  version;      // RIP version (1 or 2)
+    uint16_t zero;         // Must be zero
+    // Followed by route entries (RTEs)
+};
+
+struct sniff_eigrp {       // Cisco Enhanced Interior Gateway Routing Protocol
+    uint8_t  version;
+    uint8_t  opcode;       // Update, Query, Reply, Hello, ACK
+    uint16_t checksum;
+    uint32_t flags;
+    uint32_t sequence;
+    uint32_t ack;
+    uint32_t autonomous_system;
+    // Followed by TLVs
+};
+
+struct sniff_is_is {       // ISO/IEC 10589 (IS-IS)
+    uint8_t  nlpid;        // Network Layer Protocol ID (typically 0x83)
+    uint8_t  length;       // Length indicator
+    uint8_t  version;      // Protocol version (1)
+    uint8_t  id_length;    // System ID length
+    uint16_t pdu_type_reserved; // PDU type + reserved bits
+    uint8_t  max_area_addresses;
+    // Followed by PDU-specific fields
+};
+
+struct sniff_babel {       // RFC: 8966 (Babel routing protocol)
+    uint8_t  version;
+    uint8_t  body_length;  // In 16-byte units
+    uint16_t seqno;
+    uint16_t interval;
+    uint16_t body_checksum;
+    // Followed by TLVs
+};
+
 struct sniff_ospf {        // RFC: 2328
     uint8_t  version;
     uint8_t  type;      // 1=Hello, 2=DB Description, 3=LS Request, 4=LS Update, 5=LS Ack
@@ -183,6 +293,15 @@ struct sniff_pim {         // RFC: 7761
     uint8_t  reserved;     // Reserved
     uint16_t checksum;     // Checksum over entire PIM message
     // Followed by PIM message-specific data
+};
+
+struct sniff_lisp {        // RFC: 6830 (Locator/ID Separation Protocol)
+    uint8_t  type;         // Type and flags
+    uint8_t  reserved1;
+    uint8_t  reserved2;
+    uint8_t  nonce_present_map_version;
+    uint32_t eid_mask_len_instance_id;
+    // Followed by type-specific data
 };
 
 // not commonly used nowadays
@@ -284,6 +403,34 @@ struct sniff_sctp {        // RFC: 4960
     // Followed by one or more chunks
 };
 
+struct sniff_dccp {        // RFC: 4340 (Datagram Congestion Control Protocol)
+    uint16_t src_port;     // Source port
+    uint16_t dst_port;     // Destination port
+    uint8_t  data_offset;  // Header length and type-specific bits
+    uint8_t  ccval_cscov;  // CCID value and checksum coverage
+    uint16_t checksum;     // Checksum
+    uint32_t seq_high;     // Sequence number high bits (depends on type)
+    uint32_t seq_low;      // Sequence number low bits
+    // Followed by type-dependent fields
+};
+
+struct sniff_rtp {         // RFC: 3550 (Real-time Transport Protocol)
+    uint8_t  vpxcc;        // Version, Padding, Extension, CSRC count
+    uint8_t  mpt;          // Marker, Payload Type
+    uint16_t sequence;     // Sequence number
+    uint32_t timestamp;    // Timestamp
+    uint32_t ssrc;         // Synchronization source identifier
+    // Followed by optional CSRC list and payload
+};
+
+struct sniff_rtcp {        // RFC: 3550 (Real-time Control Protocol)
+    uint8_t  vprc;         // Version, Padding, Reception report count
+    uint8_t  packet_type;  // Packet type
+    uint16_t length;       // Length in 32-bit words minus one
+    uint32_t ssrc;         // Synchronization source identifier
+    // Followed by report blocks / payload
+};
+
 struct sniff_udplite {     // RFC: 3828
     uint16_t src_port;     // Source port
     uint16_t dst_port;     // Destination port
@@ -318,6 +465,28 @@ struct sniff_l2tp {        // RFC: 3931
 
 struct sniff_mpls {        // RFC: 3032
     uint32_t label_stack_entry; // Label (20 bits), TC (3 bits), S (1 bit), TTL (8 bits)
+};
+
+struct sniff_vxlan {       // RFC: 7348 (Virtual eXtensible LAN)
+    uint32_t flags;        // Flags (I flag indicates valid VNI)
+    uint32_t vni_reserved; // 24-bit VNI | 8-bit reserved
+};
+
+struct sniff_nvgre {       // RFC: 7637 (Network Virtualization using GRE)
+    uint16_t flags_version; // Flags and version
+    uint16_t protocol_type; // Protocol type (0x6558)
+    uint16_t tni_hi;        // Upper bits of Tunnel Network Identifier
+    uint16_t tni_flowid;    // Lower bits of TNI and flow ID
+};
+
+struct sniff_gtpv1 {       // 3GPP TS 29.060 (GPRS Tunneling Protocol v1)
+    uint8_t  flags;        // Version, protocol type, etc.
+    uint8_t  message_type; // Message type
+    uint16_t length;       // Length of payload
+    uint32_t teid;         // Tunnel Endpoint ID
+    uint16_t seq_number;   // Sequence number (optional)
+    uint8_t  n_pdu_number; // N-PDU number (optional)
+    uint8_t  next_ext;     // Next extension header type (optional)
 };
 
 struct sniff_ipcomp {      // RFC: 3173
@@ -357,6 +526,15 @@ struct sniff_ipsec_esp {   // RFC: 4303
     // Encrypted payload (variable), optional padding, etc.
 };
 
+struct sniff_dtls {        // RFC: 9147 (Datagram TLS 1.2/1.3 common header)
+    uint8_t  content_type; // Handshake, Application Data, etc.
+    uint16_t version;      // DTLS version
+    uint16_t epoch;        // Epoch
+    uint16_t sequence_hi;  // Sequence number high bits
+    uint32_t sequence_lo;  // Sequence number low bits
+    uint16_t length;       // Length of fragment
+};
+
 // -------------------------------------------------------------------------
 // BGP (Border Gateway Protocol)
 // -------------------------------------------------------------------------
@@ -370,7 +548,7 @@ struct sniff_bgp {         // RFC: 4271
 };
 
 // -------------------------------------------------------------------------
-// APPLICATION LAYER (DNS, DHCP)
+// APPLICATION LAYER (DNS, DHCP, NTP, HTTP basics)
 // -------------------------------------------------------------------------
 struct sniff_dns {         // RFC: 1035
     u_short id;
@@ -401,6 +579,38 @@ struct sniff_dhcp {        // RFC: 2131
     u_char  sname[DHCP_SNAME_LEN];
     u_char  file[DHCP_FILE_LEN];
     // Then variable DHCP options
+};
+
+struct sniff_ntp {         // RFC: 5905 (Network Time Protocol)
+    uint8_t  li_vn_mode;   // Leap Indicator, Version, Mode
+    uint8_t  stratum;      // Stratum level of the clock
+    uint8_t  poll;         // Maximum interval between messages
+    uint8_t  precision;    // Precision of the local clock
+    uint32_t root_delay;   // Total round-trip delay to primary source
+    uint32_t root_dispersion; // Nominal error relative to primary source
+    uint32_t ref_id;       // Reference ID
+    uint64_t ref_timestamp; // Reference timestamp
+    uint64_t orig_timestamp;// Originate timestamp
+    uint64_t recv_timestamp;// Receive timestamp
+    uint64_t transmit_timestamp; // Transmit timestamp
+};
+
+struct sniff_tls_record {  // RFC: 8446 (TLS 1.3 record header)
+    uint8_t  content_type; // Handshake, Application Data, etc.
+    uint16_t protocol_version; // Legacy version field
+    uint16_t length;       // Length of TLS payload
+};
+
+struct sniff_http_request { // Basic HTTP request-line representation
+    const char *method;    // Method (GET, POST, ...)
+    const char *uri;       // Request URI
+    const char *version;   // HTTP version string
+};
+
+struct sniff_http_response { // Basic HTTP status-line representation
+    const char *version;   // HTTP version string
+    uint16_t status_code;  // Status code
+    const char *reason;    // Reason phrase
 };
 
 #endif // PROTO_STRUCT_H
