@@ -618,6 +618,13 @@ struct sniff_tls_record {  // RFC: 8446 (TLS 1.3 record header)
     uint16_t length;       // Length of TLS payload
 };
 
+struct sniff_tls_handshake { // TLS Handshake header
+    uint8_t  handshake_type; // ClientHello, ServerHello, etc.
+    uint8_t  length_msb;
+    uint8_t  length_mid;
+    uint8_t  length_lsb;
+};
+
 struct sniff_http_request { // Basic HTTP request-line representation
     const char *method;    // Method (GET, POST, ...)
     const char *uri;       // Request URI

@@ -2,14 +2,7 @@
 #include <QTemporaryDir>
 
 #include "appsettings.h"
-
-class AppSettingsTest : public QObject {
-    Q_OBJECT
-
-private slots:
-    void defaults();
-    void roundTrip();
-};
+#include "tst_appsettings.h"
 
 void AppSettingsTest::defaults() {
     QTemporaryDir dir;
@@ -48,5 +41,3 @@ void AppSettingsTest::roundTrip() {
     QCOMPARE(app.theme(), QStringLiteral("Dark"));
 }
 
-QTEST_MAIN(AppSettingsTest)
-#include "tst_appsettings.moc"
