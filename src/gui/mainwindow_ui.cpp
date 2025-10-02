@@ -2,6 +2,7 @@
 #include "../theme/theme.h"
 #include "../coloring/customizerdialog.h"
 #include "../PacketTableModel.h"
+#include "../statistics/geooverviewdialog.h"
 #include <QMenu>
 #include <QMenuBar>
 #include <QCoreApplication>
@@ -155,8 +156,9 @@ void MainWindow::setupUI() {
         StatsDialog dlg(this);
         dlg.exec(); 
     });
-    statsMenu->addAction("GeoOverview", this, []() {
-        QMessageBox::information(nullptr, "GeoOverview", "World Map infos soon");
+    statsMenu->addAction("GeoOverview", this, [this]() {
+        GeoOverviewDialog dlg(packetModel, &geo, this);
+        dlg.exec();
     });
 
 
