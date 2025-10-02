@@ -1,0 +1,73 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 86,
+            "bps": 86,
+            "connections": [
+                {
+                    "dst": "ff02::1",
+                    "src": "fe80::3268:93ff:fe68:331"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "ICMPv6": 1
+            },
+            "second": 2
+        },
+        {
+            "avgPacketSize": 189.16666666666666,
+            "bps": 2270,
+            "connections": [
+                {
+                    "dst": "192.168.1.1",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "20.42.72.131",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "ff02::1",
+                    "src": "fe80::3268:93ff:fe68:331"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "20.42.72.131"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "192.168.1.1"
+                }
+            ],
+            "pps": 12,
+            "protocolCounts": {
+                "ICMPv6": 1,
+                "TCP": 7,
+                "UDP": 4
+            },
+            "second": 5
+        },
+        {
+            "avgPacketSize": 1115.7142857142858,
+            "bps": 7810,
+            "connections": [
+                {
+                    "dst": "20.42.72.131",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "20.42.72.131"
+                }
+            ],
+            "pps": 7,
+            "protocolCounts": {
+                "TCP": 7
+            },
+            "second": 6
+        }
+    ],
+    "sessionEnd": "2025-10-02T18:17:39",
+    "sessionStart": "2025-10-02T18:17:32"
+}

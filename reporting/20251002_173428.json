@@ -1,0 +1,51 @@
+{
+    "createdAt": "2025-10-02T17:34:28",
+    "description": "",
+    "packets": [
+        {
+            "color": "#ffffe880",
+            "destination": "104.18.32.47",
+            "info": "73475015  2380017984  32  ACK  6925  19062  0",
+            "number": "18",
+            "protocol": "TCP",
+            "row": 17,
+            "source": "192.168.1.102",
+            "tags": [
+                "suspicious"
+            ],
+            "time": "2.064"
+        },
+        {
+            "color": "#ffffe880",
+            "destination": "104.18.32.47",
+            "info": "73475015  2380017984  32  PSH|ACK  6963  19097  0",
+            "number": "19",
+            "protocol": "TCP",
+            "row": 18,
+            "source": "192.168.1.102",
+            "tags": [
+                "suspicious"
+            ],
+            "time": "2.064"
+        },
+        {
+            "color": "#ffffe880",
+            "destination": "192.168.1.102",
+            "info": "2380016810  73475015  32  PSH|ACK  16  29359  0",
+            "number": "20",
+            "protocol": "TCP",
+            "row": 19,
+            "source": "104.18.32.47",
+            "tags": [
+                "suspicious"
+            ],
+            "time": "2.065"
+        }
+    ],
+    "recommendedAction": "Investigate further",
+    "tags": [
+        "suspicious"
+    ],
+    "threatLevel": "Suspicious",
+    "title": ""
+}
