@@ -146,12 +146,12 @@ bool MainWindow::loadOfflineSession(const SessionStorage::LoadedSession &session
         ? session.record.startTime
         : QDateTime::currentDateTime();
 
-    for (const QByteArray &raw : session.packets) {
-        Sniffing::appendPacket(raw);
+    for (const CapturedPacket &packet : session.packets) {
+        Sniffing::appendPacket(packet);
         QStringList infos;
         infos << QString::number(packetTimestamp.toSecsSinceEpoch())
-              << QString::number(raw.size());
-        handlePacket(raw, infos);
+              << QString::number(packet.data.size());
+        handlePacket(packet.data, infos, packet.linkType);
         packetTimestamp = packetTimestamp.addMSecs(1);
     }
 

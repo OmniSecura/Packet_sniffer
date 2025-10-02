@@ -7,10 +7,15 @@
 #include <QStringList>
 #include <QVector>
 
+#ifndef DLT_EN10MB
+#define DLT_EN10MB 1
+#endif
+
 struct PacketTableRow {
     QStringList columns; // column texts: No., Time, Source, Destination, Protocol, Length, Info
     QByteArray rawData;  // packet raw bytes
     QColor background;   // background color
+    int linkType = DLT_EN10MB;
 };
 
 

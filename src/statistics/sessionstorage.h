@@ -8,7 +8,7 @@
 #include <QStringList>
 #include <optional>
 
-class QByteArray;
+#include "../../packets/sniffing.h"
 
 namespace SessionStorage {
 
@@ -27,7 +27,7 @@ struct SessionRecord {
 struct LoadedSession {
     SessionRecord record;
     QJsonDocument statsDocument;
-    QVector<QByteArray> packets;
+    QVector<CapturedPacket> packets;
 };
 
 QString sessionsDirectory();

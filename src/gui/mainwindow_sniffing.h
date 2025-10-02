@@ -5,6 +5,6 @@
 
 void startSniffing();
 void stopSniffing();
-void handlePacket(const QByteArray &raw, const QStringList &infos);
+void handlePacket(const QByteArray &raw, const QStringList &infos, int linkType);
 
 #endif //MAINWINDOW_SNIFFING_H

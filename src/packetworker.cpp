@@ -33,7 +33,7 @@ void PacketWorker::process() {
         return;
     }
 
-    Sniffing::setLinkLayer(pcap_datalink(m_handle.get()));
+    m_linkType.store(pcap_datalink(m_handle.get()), std::memory_order_relaxed);
 
     // 2) compile & set filter via Filters
     Filters flt;

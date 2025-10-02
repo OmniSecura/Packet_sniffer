@@ -2,7 +2,6 @@
 #define SNIFFING_H
 
 #include <QString>
-#include "src/packetworker.h"
 #include "protocols/proto_struct.h"
 #include <arpa/inet.h>
 #include <netinet/if_ether.h>
@@ -32,7 +31,12 @@ struct PacketLayer {
     QVector<ProtoField> fields;
 };
 
-class PacketWorker;  
+struct CapturedPacket {
+    QByteArray data;
+    int linkType = DLT_EN10MB;
+};
+
+class PacketWorker;
 
 class Sniffing {
 public:
@@ -43,49 +47,45 @@ public:
                                 const struct pcap_pkthdr *header,
                                 const u_char *packet);
     // === Parsers ====
-    QStringList parseArp(const u_char *pkt) const;
-    QStringList parseTcp(const u_char *pkt) const;
-    QStringList parseUdp(const u_char *pkt) const;
-    QStringList parseIcmp(const u_char *pkt) const;
-    QStringList parseIcmpv6(const u_char *pkt) const;
-    QStringList parseIgmp(const u_char *pkt) const;
-    QStringList parseSctp(const u_char *pkt) const;
-    QStringList parseUdplite(const u_char *pkt) const;
-    QStringList parseGre(const u_char *pkt) const;
-    QStringList parseOspf(const u_char *pkt) const;
-    QStringList parseRsvp(const u_char *pkt) const;
-    QStringList parsePim(const u_char *pkt) const;
-    QStringList parseEgp(const u_char *pkt) const;
-    QStringList parseAh(const u_char *pkt) const;
-    QStringList parseEsp(const u_char *pkt) const;
-    QStringList parseMpls(const u_char *pkt) const;
-    QStringList parseIpip(const u_char *pkt) const;
-    QStringList parseIpv6HopByHop(const u_char *pkt) const;
-    QStringList parseIpv6Routing(const u_char *pkt) const;
-    QStringList parseIpv6Fragment(const u_char *pkt) const;
-    QStringList parseIpv6Destination(const u_char *pkt) const;
-    QStringList parseIpv6Mobility(const u_char *pkt) const;
+    QStringList parseArp(const u_char *pkt, int linkType) const;
+    QStringList parseTcp(const u_char *pkt, int linkType) const;
+    QStringList parseUdp(const u_char *pkt, int linkType) const;
+    QStringList parseIcmp(const u_char *pkt, int linkType) const;
+    QStringList parseIcmpv6(const u_char *pkt, int linkType) const;
+    QStringList parseIgmp(const u_char *pkt, int linkType) const;
+    QStringList parseSctp(const u_char *pkt, int linkType) const;
+    QStringList parseUdplite(const u_char *pkt, int linkType) const;
+    QStringList parseGre(const u_char *pkt, int linkType) const;
+    QStringList parseOspf(const u_char *pkt, int linkType) const;
+    QStringList parseRsvp(const u_char *pkt, int linkType) const;
+    QStringList parsePim(const u_char *pkt, int linkType) const;
+    QStringList parseEgp(const u_char *pkt, int linkType) const;
+    QStringList parseAh(const u_char *pkt, int linkType) const;
+    QStringList parseEsp(const u_char *pkt, int linkType) const;
+    QStringList parseMpls(const u_char *pkt, int linkType) const;
+    QStringList parseIpip(const u_char *pkt, int linkType) const;
+    QStringList parseIpv6HopByHop(const u_char *pkt, int linkType) const;
+    QStringList parseIpv6Routing(const u_char *pkt, int linkType) const;
+    QStringList parseIpv6Fragment(const u_char *pkt, int linkType) const;
+    QStringList parseIpv6Destination(const u_char *pkt, int linkType) const;
+    QStringList parseIpv6Mobility(const u_char *pkt, int linkType) const;
     // ================
 
-    QVector<PacketLayer> parseLayers(const u_char* pkt) const;
+    QVector<PacketLayer> parseLayers(const u_char* pkt, int linkType) const;
 
     QString toHexAscii(const u_char *payload, int len) const;
-    QStringList packetSummary(const u_char *packet, int total_len) const;
+    QStringList packetSummary(const u_char *packet, int total_len, int linkType) const;
 
     //These are for saving and opening my pcap files
     void saveToPcap(const QString &filePath);
     void openFromPcap(const QString &filePath);
 
     //I will use this to save my packet sniffing session later
-    static QVector<QByteArray> packetBuffer;
+    static QVector<CapturedPacket> packetBuffer;
     static QMutex packetMutex;
-    static void appendPacket(const QByteArray &raw);
-    static const QVector<QByteArray>& getAllPackets();
+    static void appendPacket(const CapturedPacket &packet);
+    static const QVector<CapturedPacket>& getAllPackets();
     void clearBuffer();
-
-    static void setLinkLayer(int linkType);
-    static int  linkHeaderLength();
-    static int  linkType();
 
 };
 

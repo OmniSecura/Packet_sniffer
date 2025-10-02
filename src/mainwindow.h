@@ -76,7 +76,7 @@ public:
 private slots:
     void startSniffing();
     void stopSniffing();
-    void handlePacket(const QByteArray &raw, const QStringList &infos);
+    void handlePacket(const QByteArray &raw, const QStringList &infos, int linkType);
     // void onPacketClicked(int row, int col);
     void onPacketClicked(const QModelIndex &index);
     void showColorizeCustomizer();
@@ -93,7 +93,7 @@ private slots:
 private:
     void setupUI();
     void listInterfaces();
-    QStringList infoColumn(const QStringList &summary, const u_char *pkt);
+    QStringList infoColumn(const QStringList &summary, const u_char *pkt, int linkType);
     void addLayerToTree(QTreeWidget *tree, const PacketLayer &lay);
     void saveAnnotationToFile(const PacketAnnotation &annotation);
     void loadPreferences();
