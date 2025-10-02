@@ -7,15 +7,6 @@
 #include <QSet>
 
 namespace {
-int computeLinkHeaderLen(int linkType) {
-    switch (linkType) {
-        case DLT_LINUX_SLL:
-            return LINUX_SLL_HEADER_LEN;
-        default:
-            return SIZE_ETHERNET;
-    }
-}
-
 QString packetTypeToString(uint16_t type) {
     switch (type) {
         case PACKET_HOST:       return QStringLiteral("HOST");
