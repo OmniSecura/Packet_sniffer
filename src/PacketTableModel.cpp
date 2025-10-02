@@ -66,3 +66,17 @@ void PacketTableModel::clear()
     endResetModel();
 }
 
+void PacketTableModel::setRowBackground(int index, const QColor &color)
+{
+    if (index < 0 || index >= m_rows.size())
+        return;
+
+    if (m_rows[index].background == color)
+        return;
+
+    m_rows[index].background = color;
+    const QModelIndex left = createIndex(index, 0);
+    const QModelIndex right = createIndex(index, ColumnCount - 1);
+    emit dataChanged(left, right, {Qt::BackgroundRole});
+}
+
