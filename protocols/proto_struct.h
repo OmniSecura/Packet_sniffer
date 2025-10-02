@@ -66,6 +66,43 @@ struct sniff_ipv6 {        // RFC: 8200
     struct in6_addr ip6_dst;
 };
 
+struct sniff_ipv6_hopopts { // RFC: 8200 (Hop-by-Hop Options)
+    uint8_t  next_header;  // Next header value
+    uint8_t  hdr_ext_len;  // Extension header length in 8-octet units
+    // Followed by options
+};
+
+struct sniff_ipv6_dstopts { // RFC: 8200 (Destination Options)
+    uint8_t  next_header;  // Next header value
+    uint8_t  hdr_ext_len;  // Extension header length in 8-octet units
+    // Followed by options
+};
+
+struct sniff_ipv6_routing { // RFC: 8200 (Routing Header)
+    uint8_t  next_header;  // Next header value
+    uint8_t  hdr_ext_len;  // Extension header length
+    uint8_t  routing_type; // Routing type
+    uint8_t  segments_left;// Segments left
+    uint32_t reserved;     // Reserved / type-specific data
+    // Followed by type-specific routing data
+};
+
+struct sniff_ipv6_fragment { // RFC: 8200 (Fragment Header)
+    uint8_t  next_header;  // Next header value
+    uint8_t  reserved;     // Reserved
+    uint16_t frag_offset;  // Offset, Res, M flag
+    uint32_t identification; // Fragment identification
+};
+
+struct sniff_ipv6_mobility { // RFC: 6275 (Mobility Header)
+    uint8_t  next_header;  // Next header value
+    uint8_t  hdr_ext_len;  // Header extension length
+    uint8_t  mh_type;      // Mobility message type
+    uint8_t  reserved;     // Reserved
+    uint16_t checksum;     // Checksum
+    // Followed by mobility options / data
+};
+
 struct sniff_icmp {        // RFC: 792
     uint8_t  icmp_type;
     uint8_t  icmp_code;
@@ -87,23 +124,38 @@ struct sniff_icmpv6 {      // RFC: 4443
     } icmp6_data;
 };
 
-// struct sniff_igmpv1v2 {    // RFC: 1112 (v1), RFC: 2236 (v2)
-//     uint8_t  igmpv2_type;
-//     uint8_t  igmpv2_mrt; // v1: always 0, v2: Max Resp Time in 1/10s sec
-//     uint16_t igmpv2_cksum;
-//     uint32_t igmpv2_ga;
-// };
+struct sniff_igmpv1v2 {    // RFC: 1112 (v1), RFC: 2236 (v2)
+    uint8_t  type;     // Message type
+    uint8_t  mrt;      // Max Response Time (v1: 0)
+    uint16_t cksum;    // Checksum
+    struct in_addr group_addr; // Group Address
+};
 
-// struct sniff_igmpv3 {       // RFC: 3376
-//     uint8_t  igmpv3_type;
-//     uint8_t  igmpv3_mrc;
-//     uint16_t igmpv3_cksum;
-//     uint32_t igmpv3_ga;
-//     uint8_t  igmpv3_flags;
-//     uint8_t  igmpv3_qqic;
-//     uint16_t igmpv3_nos;
-//     struct in_addr[];  // group records (variable)
-// };
+struct sniff_igmpv3_query {  // RFC: 3376 (Membership Query)
+    uint8_t  type;           // 0x11
+    uint8_t  resv_s_qrv;     // Reserved + Suppress + QRV
+    uint8_t  qqic;           // Querier's Query Interval Code
+    uint16_t num_sources;    // Number of source addresses
+    struct in_addr group_addr; // Group Address
+    // Followed by source addresses (variable) and optional data
+};
+
+struct sniff_igmpv3_record { // RFC: 3376 (Group Record)
+    uint8_t  record_type;    // e.g. 1=MODE_IS_INCLUDE
+    uint8_t  aux_data_len;   // In 32-bit words
+    uint16_t num_sources;    // Number of source addresses
+    struct in_addr group_addr; // Multicast Address
+    // Followed by source addresses and optional auxiliary data
+};
+
+struct sniff_igmpv3_report { // RFC: 3376 (Membership Report)
+    uint8_t  type;           // 0x22
+    uint8_t  reserved1;
+    uint16_t cksum;          // Checksum
+    uint16_t reserved2;
+    uint16_t num_group_records; // Number of group records
+    // Followed by sniff_igmpv3_record entries
+};
 
 struct sniff_ospf {        // RFC: 2328
     uint8_t  version;
@@ -116,34 +168,78 @@ struct sniff_ospf {        // RFC: 2328
     // then authentication data (8 bytes), and message-specific data
 };
 
-// struct sniff_rsvp {
+struct sniff_rsvp {        // RFC: 2205
+    uint8_t  ver_flags;    // Version (4 bits) | Flags (4 bits)
+    uint8_t  msg_type;     // Path, Resv, Err, etc.
+    uint16_t checksum;     // Standard checksum
+    uint8_t  send_ttl;     // Send TTL
+    uint8_t  reserved;     // Reserved
+    uint16_t length;       // Length of entire RSVP message
+    // Followed by RSVP objects
+};
 
-// };
+struct sniff_pim {         // RFC: 7761
+    uint8_t  ver_type;     // Version (4 bits) | Message Type (4 bits)
+    uint8_t  reserved;     // Reserved
+    uint16_t checksum;     // Checksum over entire PIM message
+    // Followed by PIM message-specific data
+};
 
-// struct sniff_pim {
+// not commonly used nowadays
+struct sniff_egp {         // RFC: 904
+    uint8_t  version;      // Protocol version
+    uint8_t  type;         // Message type
+    uint8_t  code;         // Code within the type
+    uint8_t  status;       // Status field
+    uint16_t checksum;     // Checksum
+    uint16_t autonomous_system; // Sender AS number
+    uint16_t sequence;     // Sequence number
+    // Followed by type-specific data
+};
 
-// };
+struct sniff_pup {         // PARC Universal Packet
+    uint8_t  transport_control; // Hop count
+    uint8_t  type;         // Packet type
+    uint16_t id;           // Identification
+    uint16_t dst_net;      // Destination network
+    uint8_t  dst_host[6];  // Destination host
+    uint16_t dst_socket;   // Destination socket
+    uint16_t src_net;      // Source network
+    uint8_t  src_host[6];  // Source host
+    uint16_t src_socket;   // Source socket
+};
 
-// // not commonly used nowadays
-// struct sniff_egp{
+struct sniff_idp {         // RFC: 906 (XNS IDP)
+    uint16_t checksum;     // Checksum (0 if unused)
+    uint16_t length;       // Packet length
+    uint8_t  transport_control; // Hop count
+    uint8_t  packet_type;  // Packet type
+    uint32_t dst_network;  // Destination network
+    uint8_t  dst_host[6];  // Destination host
+    uint16_t dst_socket;   // Destination socket
+    uint32_t src_network;  // Source network
+    uint8_t  src_host[6];  // Source host
+    uint16_t src_socket;   // Source socket
+};
 
-// };
+struct sniff_tp4 {         // ISO Transport Protocol Class 4
+    uint8_t  li;           // Header length indicator
+    uint8_t  code;         // TPDU code
+    uint16_t dst_ref;      // Destination reference
+    uint16_t src_ref;      // Source reference
+    uint8_t  class_options;// Class/options flags
+    // Followed by variable parameters
+};
 
-// struct sniff_pup{
-
-// };
-
-// struct sniff_idp{
-
-// };
-
-// struct sniff_tp{
-
-// };
-
-// struct sniff_mtp{
-
-// };
+struct sniff_mtp {         // RFC: 1301 (Multicast Transport Protocol)
+    uint8_t  version;      // Protocol version
+    uint8_t  reserved;     // Reserved
+    uint16_t checksum;     // Checksum
+    uint16_t length;       // Total length
+    uint16_t session_id;   // Session identifier
+    uint32_t seq_number;   // Sequence number
+    // Followed by payload
+};
 
 // -------------------------------------------------------------------------
 // TRANSPORT LAYER (TCP, UDP)
@@ -180,6 +276,21 @@ struct sniff_udp {         // RFC: 768
     u_short uh_sum;
 };
 
+struct sniff_sctp {        // RFC: 4960
+    uint16_t src_port;     // Source port
+    uint16_t dst_port;     // Destination port
+    uint32_t verification_tag; // Verification tag
+    uint32_t checksum;     // Adler-32 checksum
+    // Followed by one or more chunks
+};
+
+struct sniff_udplite {     // RFC: 3828
+    uint16_t src_port;     // Source port
+    uint16_t dst_port;     // Destination port
+    uint16_t checksum_cov; // Checksum coverage
+    uint16_t checksum;     // Checksum
+};
+
 // -------------------------------------------------------------------------
 // TUNNELING (GRE, IPv4-in-IPv4, L2TP, MPLS-in-IP, etc.)
 // -------------------------------------------------------------------------
@@ -187,6 +298,45 @@ struct sniff_gre {         // RFC: 2784
     u_short flags_version;  // bits: C,R,K,S,etc. + version
     u_short protocol;       // Ethertype of encapsulated payload
     // optional fields if flags are set: checksum, key, sequence, etc.
+};
+
+struct sniff_ipip {        // RFC: 2003 (IPv4-in-IPv4)
+    struct sniff_ip outer_header; // Encapsulating IPv4 header
+    // Followed by inner IP packet
+};
+
+struct sniff_l2tp {        // RFC: 3931
+    uint16_t flags_version; // Flags and version
+    uint16_t length;        // Length (optional depending on flags)
+    uint16_t tunnel_id;     // Tunnel ID
+    uint16_t session_id;    // Session ID
+    uint16_t ns;            // Sequence number (optional)
+    uint16_t nr;            // Next sequence (optional)
+    uint16_t offset_size;   // Offset size (optional)
+    // Followed by payload
+};
+
+struct sniff_mpls {        // RFC: 3032
+    uint32_t label_stack_entry; // Label (20 bits), TC (3 bits), S (1 bit), TTL (8 bits)
+};
+
+struct sniff_ipcomp {      // RFC: 3173
+    uint8_t  next_header;  // Next header
+    uint8_t  flags;        // Flags
+    uint16_t cpi;          // Compression Parameter Index
+};
+
+struct sniff_beetph {      // RFC: 5566 (BEET Mode IPsec)
+    uint8_t  next_header;  // Next header value
+    uint8_t  hdr_len;      // Header length in 32-bit words
+    uint16_t reserved;     // Reserved
+    uint32_t spi;          // Security Parameter Index
+    // Followed by optional BEET-specific data
+};
+
+struct sniff_ipencap {     // Generic IP-in-IP encapsulation header
+    uint16_t reserved;     // Reserved
+    uint16_t length;       // Payload length (if used)
 };
 
 // -------------------------------------------------------------------------
