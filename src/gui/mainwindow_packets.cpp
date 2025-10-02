@@ -2,6 +2,8 @@
 #include "../packets/packethelpers.h"
 #include "../../protocols/proto_struct.h"
 #include "../PacketTableModel.h"
+#include "selectionannotationdialog.h"
+#include <algorithm>
 
 // void MainWindow::onPacketClicked(int row, int /*col*/) { //QTableWidget before QTableView
 void MainWindow::onPacketClicked(const QModelIndex &index) {
@@ -133,6 +135,7 @@ void MainWindow::startNewSession(){
     packetCountLabel->setText("Packets: 0");
     sessionStartTime = QDateTime::currentDateTime();
     updateSessionTime();
+    annotations.clear();
 }
 
 void MainWindow::onPacketTableContextMenu(const QPoint &pos) 
@@ -162,6 +165,7 @@ void MainWindow::onPacketTableContextMenu(const QPoint &pos)
     protoList.removeDuplicates();
 
     QMenu menu(this);
+    QAction *annotateAct = menu.addAction(tr("Annotate Selection…"));
     QAction *reportAct = menu.addAction(tr("Report"));
     QMenu *filterMenu = menu.addMenu(tr("Filter…"));
     QAction *srcAct   = filterMenu->addAction(tr("Source Host"));
@@ -171,7 +175,38 @@ void MainWindow::onPacketTableContextMenu(const QPoint &pos)
     QAction *chosen = menu.exec(packetTable->viewport()->mapToGlobal(pos));
     if (!chosen) return;
 
-    if (chosen == reportAct) {
+    if (chosen == annotateAct) {
+        QVector<int> selectedRows = rows.toVector();
+        std::sort(selectedRows.begin(), selectedRows.end());
+
+        SelectionAnnotationDialog dlg(selectedRows, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            SelectionAnnotationDialog::Result dialogResult = dlg.result();
+            PacketAnnotation annotation;
+            annotation.rows = selectedRows;
+            annotation.title = dialogResult.title;
+            annotation.description = dialogResult.description;
+            annotation.tags = dialogResult.tags;
+            annotation.threatLevel = dialogResult.threatLevel;
+            annotation.recommendedAction = dialogResult.recommendedAction;
+            annotation.color = dialogResult.color;
+            annotation.createdAt = QDateTime::currentDateTime();
+
+            annotations.append(annotation);
+            for (int rowIndex : annotation.rows)
+                packetModel->setRowBackground(rowIndex, annotation.color);
+
+            QString statusMessage = annotation.title.isEmpty()
+                ? tr("Annotated %1 packets (%2)")
+                      .arg(annotation.rows.size())
+                      .arg(annotation.threatLevel)
+                : tr("Annotated %1 packets as '%2'")
+                      .arg(annotation.rows.size())
+                      .arg(annotation.title);
+            statusBar()->showMessage(statusMessage, 6000);
+        }
+    }
+    else if (chosen == reportAct) {
         QMessageBox::information(this, tr("Report"), tr("Reporting not implemented yet."));
     } else if (chosen == srcAct) {
         QStringList parts;
