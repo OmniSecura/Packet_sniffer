@@ -56,6 +56,7 @@ private:
     QStringList splitTags(const QString &text) const;
     QString defaultTagForThreat() const;
     void updateColorButton(int row);
+    void applyRowColor(int row);
 
     QVector<PacketSummary> m_packets;
     QVector<QColor> m_packetColors;

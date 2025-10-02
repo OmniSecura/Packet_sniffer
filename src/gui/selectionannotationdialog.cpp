@@ -5,6 +5,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHeaderView>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -139,11 +140,18 @@ SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary
     form->addRow(tr("Global tags"), m_tagsEdit);
     form->addRow(tr("Recommended action"), m_actionCombo);
 
+    auto *contentLayout = new QHBoxLayout;
+    contentLayout->addWidget(m_packetTable, 3);
+    contentLayout->addLayout(form, 2);
+    contentLayout->setStretch(0, 3);
+    contentLayout->setStretch(1, 2);
+    contentLayout->setSpacing(16);
+    contentLayout->setAlignment(form, Qt::AlignTop);
+
     auto *layout = new QVBoxLayout;
     if (!m_summaryLabel->text().isEmpty())
         layout->addWidget(m_summaryLabel);
-    layout->addWidget(m_packetTable);
-    layout->addLayout(form);
+    layout->addLayout(contentLayout);
     layout->addWidget(m_buttonBox);
 
     setLayout(layout);
@@ -240,11 +248,38 @@ void SelectionAnnotationDialog::updateColorButton(int row)
         return;
 
     const QColor color = m_packetColors.value(row, QColor(255, 232, 128));
-    const QString foreground = (color.lightness() < 128)
+    const QString textColor = (color.lightness() < 128)
         ? QStringLiteral("white")
         : QStringLiteral("black");
     const QString style = QStringLiteral("background-color: %1; color: %2;")
                               .arg(color.name())
-                              .arg(foreground);
+                              .arg(textColor);
     button->setStyleSheet(style);
+
+    applyRowColor(row);
+}
+
+void SelectionAnnotationDialog::applyRowColor(int row)
+{
+    if (!m_packetTable || row < 0 || row >= m_packetTable->rowCount())
+        return;
+
+    const QColor color = m_packetColors.value(row, QColor(255, 232, 128));
+    const QColor foreground = (color.lightness() < 128) ? QColor(Qt::white) : QColor(Qt::black);
+
+    for (int column = 0; column < 6; ++column) {
+        if (auto *item = m_packetTable->item(row, column)) {
+            item->setBackground(color);
+            item->setForeground(foreground);
+        }
+    }
+
+    if (auto *tagEdit = m_packetTagEdits.value(row, nullptr)) {
+        const QString tagStyle = QStringLiteral(
+                                       "QLineEdit { background-color: %1; color: %2; } "
+                                       "QLineEdit::placeholder { color: %2; }")
+                                     .arg(color.name())
+                                     .arg(foreground.name());
+        tagEdit->setStyleSheet(tagStyle);
+    }
 }
