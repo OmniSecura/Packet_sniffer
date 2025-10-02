@@ -1,7 +1,11 @@
 #include "sniffing.h"
 #include "packethelpers.h"
-#include <ctype.h> 
+#include <ctype.h>
 #include <QMutexLocker>
+
+#ifndef IPPROTO_OSPFIGP
+#define IPPROTO_OSPFIGP 89
+#endif
 
 Sniffing::Sniffing() {}
 Sniffing::~Sniffing() {}
