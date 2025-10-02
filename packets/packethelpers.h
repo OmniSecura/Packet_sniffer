@@ -106,6 +106,85 @@ inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt, int linkType) {
         pkt + linkHdrLen(linkType) + sizeof(sniff_ipv6)
     );
 }
+struct TcpSegmentView {
+    const sniff_tcp *header = nullptr;
+    const u_char *payload = nullptr;
+    int payloadLength = 0;
+    bool ipv6 = false;
+};
+
+inline TcpSegmentView tcpSegmentView(const u_char* pkt, int linkType) {
+    TcpSegmentView view;
+    uint16_t type = ethType(pkt, linkType);
+    if (type == ETHERTYPE_IP) {
+        auto ip = ipv4Hdr(pkt, linkType);
+        auto tcp = tcpHdr(pkt, linkType);
+        if (!ip || !tcp)
+            return view;
+        int ipHeaderLen = ipv4HdrLen(pkt, linkType);
+        int totalLen = ntohs(ip->ip_len);
+        int tcpHeaderLen = TH_OFF(tcp) * 4;
+        if (totalLen >= ipHeaderLen + tcpHeaderLen) {
+            view.header = tcp;
+            view.payload = reinterpret_cast<const u_char*>(tcp) + tcpHeaderLen;
+            view.payloadLength = totalLen - ipHeaderLen - tcpHeaderLen;
+        }
+    }
+    else if (type == ETHERTYPE_IPV6) {
+        auto ip6 = ipv6Hdr(pkt, linkType);
+        auto tcp = tcp6Hdr(pkt, linkType);
+        if (!ip6 || !tcp)
+            return view;
+        int tcpHeaderLen = TH_OFF(tcp) * 4;
+        int payloadLen = ntohs(ip6->ip6_plen);
+        if (payloadLen >= tcpHeaderLen) {
+            view.header = tcp;
+            view.payload = reinterpret_cast<const u_char*>(tcp) + tcpHeaderLen;
+            view.payloadLength = payloadLen - tcpHeaderLen;
+            view.ipv6 = true;
+        }
+    }
+    return view;
+}
+
+struct UdpDatagramView {
+    const sniff_udp *header = nullptr;
+    const u_char *payload = nullptr;
+    int payloadLength = 0;
+    bool ipv6 = false;
+};
+
+inline UdpDatagramView udpDatagramView(const u_char* pkt, int linkType) {
+    UdpDatagramView view;
+    uint16_t type = ethType(pkt, linkType);
+    if (type == ETHERTYPE_IP) {
+        auto ip = ipv4Hdr(pkt, linkType);
+        auto udp = udpHdr(pkt, linkType);
+        if (!ip || !udp)
+            return view;
+        int udpLen = ntohs(udp->uh_len);
+        if (udpLen >= int(sizeof(sniff_udp))) {
+            view.header = udp;
+            view.payload = reinterpret_cast<const u_char*>(udp) + sizeof(sniff_udp);
+            view.payloadLength = udpLen - int(sizeof(sniff_udp));
+        }
+    }
+    else if (type == ETHERTYPE_IPV6) {
+        auto ip6 = ipv6Hdr(pkt, linkType);
+        auto udp = udp6Hdr(pkt, linkType);
+        if (!ip6 || !udp)
+            return view;
+        int payloadLen = ntohs(ip6->ip6_plen);
+        if (payloadLen >= int(sizeof(sniff_udp))) {
+            view.header = udp;
+            view.payload = reinterpret_cast<const u_char*>(udp) + sizeof(sniff_udp);
+            view.payloadLength = payloadLen - int(sizeof(sniff_udp));
+            view.ipv6 = true;
+        }
+    }
+    return view;
+}
+
 // MAC → QString
 inline QString macToStr(const u_char *a) {
     return QString("%1:%2:%3:%4:%5:%6")

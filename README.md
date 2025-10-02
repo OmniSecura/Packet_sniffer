@@ -11,6 +11,11 @@ qmake PacketSniffer.pro CONFIG+=release && make -j"$(nproc)"
 make distclean
 ```
 
+## Application Protocol Support
+- HTTP request/response lines and headers are decoded and exposed in the packet details tree.
+- DNS queries and responses include transaction metadata along with parsed questions, answers, authority and additional records.
+- TLS handshakes surface record type, negotiated versions, SNI host names and cipher information for ClientHello/ServerHello messages.
+
 # Ethernet II vs Linux Cooked Capture
 At the moment when packet capturing starts, PacketWorker::process queries libpcap for the data link layer type (pcap_datalink) and passes the result to Sniffing::setLinkLayer. This means that whatever libpcap reports for the active interface directly controls the parsing logic in the application.
 

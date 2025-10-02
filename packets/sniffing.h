@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QMutex>
+#include <QtGlobal>
 
 #ifndef DLT_EN10MB
 #define DLT_EN10MB 1
@@ -29,6 +30,62 @@ struct ProtoField {
 struct PacketLayer {
     QString name;
     QVector<ProtoField> fields;
+};
+
+struct HttpHeader {
+    QString name;
+    QString value;
+};
+
+struct ParsedHttp {
+    bool valid = false;
+    bool isRequest = false;
+    QString method;
+    QString target;
+    QString version;
+    int statusCode = 0;
+    QString reason;
+    QString host;
+    QVector<HttpHeader> headers;
+};
+
+struct DnsQuestion {
+    QString name;
+    QString type;
+    QString klass;
+};
+
+struct DnsRecord {
+    QString name;
+    QString type;
+    QString klass;
+    quint32 ttl = 0;
+    QString data;
+};
+
+struct ParsedDns {
+    bool valid = false;
+    bool isResponse = false;
+    quint16 id = 0;
+    quint8 opcode = 0;
+    quint8 rcode = 0;
+    bool authoritative = false;
+    bool truncated = false;
+    QVector<DnsQuestion> questions;
+    QVector<DnsRecord> answers;
+    QVector<DnsRecord> authorities;
+    QVector<DnsRecord> additionals;
+};
+
+struct ParsedTls {
+    bool valid = false;
+    QString recordType;
+    QString version;
+    QString handshakeType;
+    QString serverName;
+    QString selectedCipher;
+    QStringList cipherSuites;
+    bool isClientHello = false;
 };
 
 struct CapturedPacket {
@@ -69,6 +126,9 @@ public:
     QStringList parseIpv6Fragment(const u_char *pkt, int linkType) const;
     QStringList parseIpv6Destination(const u_char *pkt, int linkType) const;
     QStringList parseIpv6Mobility(const u_char *pkt, int linkType) const;
+    ParsedHttp parseHttp(const u_char *pkt, int linkType) const;
+    ParsedDns parseDns(const u_char *pkt, int linkType) const;
+    ParsedTls parseTls(const u_char *pkt, int linkType) const;
     // ================
 
     QVector<PacketLayer> parseLayers(const u_char* pkt, int linkType) const;
