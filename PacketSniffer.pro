@@ -20,6 +20,7 @@ SOURCES += \
     src/gui/mainwindow_sniffing.cpp \
     src/gui/mainwindow_packets.cpp \
     src/gui/selectionannotationdialog.cpp \
+    src/gui/preferencesdialog.cpp \
     src/statistics/geooverviewdialog.cpp \
     src/statistics/statsdialog.cpp \
     src/statistics/charts/barChart.cpp \
@@ -27,7 +28,8 @@ SOURCES += \
     src/statistics/charts/pieChart.cpp \
     src/statistics/statistics.cpp \
     packets/packet_geolocation/CountryMapping/CountryMap.cpp \
-    src/PacketTableModel.cpp
+    src/PacketTableModel.cpp \
+    src/appsettings.cpp
 
 HEADERS += \
     devices/devices.h \
@@ -47,6 +49,7 @@ HEADERS += \
     src/gui/mainwindow_sniffing.h \
     src/gui/mainwindow_packets.h \
     src/gui/selectionannotationdialog.h \
+    src/gui/preferencesdialog.h \
     src/statistics/geooverviewdialog.h \
     src/theme/ui_otherthemesdialog.h \
     src/statistics/statsdialog.h \
@@ -57,7 +60,8 @@ HEADERS += \
     src/statistics/charts/ChartConfig.h \
     packets/packet_geolocation/GeoMap.h \
     packets/packet_geolocation/CountryMapping/CountryMap.h \
-    src/PacketTableModel.h
+    src/PacketTableModel.h \
+    src/appsettings.h
 
 INCLUDEPATH += protocols
 

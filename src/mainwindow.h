@@ -1,3 +1,4 @@
+
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
@@ -36,7 +37,7 @@
 #include "packets/sniffing.h"
 #include "coloring/packetcolorizer.h"
 #include "theme/theme.h"
-#include "theme/otherthemesdialog.h"   
+#include "theme/otherthemesdialog.h"
 #include "coloring/customizerdialog.h"
 #include "../packets/packethelpers.h"
 #include "statistics/statsdialog.h"
@@ -46,6 +47,7 @@
 #include "packets/packet_geolocation/GeoMap.h"
 #include "packets/packet_geolocation/CountryMapping/CountryMap.h"
 #include "PacketTableModel.h"
+#include "appsettings.h"
 
 struct PacketAnnotationItem {
     int row = -1;
@@ -80,10 +82,11 @@ private slots:
     void startNewSession();
     void onPacketTableContextMenu(const QPoint &pos);
     void onFilterTextChanged(const QString &text);
-    void toggleTheme(); 
+    void toggleTheme();
     void updateSessionTime();
     void updateProtocolCombo();
     void showOtherThemesDialog();
+    void openPreferences();
 
 private:
     void setupUI();
@@ -91,6 +94,7 @@ private:
     QStringList infoColumn(const QStringList &summary, const u_char *pkt);
     void addLayerToTree(QTreeWidget *tree, const PacketLayer &lay);
     void saveAnnotationToFile(const PacketAnnotation &annotation);
+    void loadPreferences();
 
     PacketColorizer packetColorizer;
 
@@ -135,6 +139,8 @@ private:
     GeoMapWidget *mapWidget = nullptr;
 
     QVector<PacketAnnotation> annotations;
+
+    AppSettings appSettings;
 };
 
 #endif // MAINWINDOW_H

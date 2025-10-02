@@ -1,0 +1,36 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 90.14285714285714,
+            "bps": 631,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 7,
+            "protocolCounts": {
+                "OTHER": 7
+            },
+            "second": 1
+        },
+        {
+            "avgPacketSize": 87.82352941176471,
+            "bps": 1493,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 17,
+            "protocolCounts": {
+                "OTHER": 17
+            },
+            "second": 2
+        }
+    ],
+    "sessionEnd": "2025-10-02T19:32:28",
+    "sessionStart": "2025-10-02T19:32:26"
+}
