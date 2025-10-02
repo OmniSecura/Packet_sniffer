@@ -1,0 +1,49 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 66,
+            "bps": 66,
+            "connections": [
+                {
+                    "dst": "52.182.143.215",
+                    "src": "192.168.1.77"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "TCP": 1
+            },
+            "second": 1
+        },
+        {
+            "avgPacketSize": 58,
+            "bps": 348,
+            "connections": [
+                {
+                    "dst": "52.182.143.215",
+                    "src": "192.168.1.77"
+                },
+                {
+                    "dst": "192.168.1.77",
+                    "src": "192.168.1.1"
+                },
+                {
+                    "dst": "192.168.1.1",
+                    "src": "192.168.1.77"
+                },
+                {
+                    "dst": "192.168.1.77",
+                    "src": "52.182.143.215"
+                }
+            ],
+            "pps": 6,
+            "protocolCounts": {
+                "ARP": 2,
+                "TCP": 4
+            },
+            "second": 2
+        }
+    ],
+    "sessionEnd": "2025-10-02T14:10:59",
+    "sessionStart": "2025-10-02T14:10:57"
+}

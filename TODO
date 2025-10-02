@@ -1,0 +1,141 @@
+STATISTICS:
+1. pobieranie informacji pakietów (protokół, ilość pakietów danego protokołu, 
+                                src i dst ip (moge zrobić też połaczenia unikalne czyli łaczeenie dst i src w pary)
+                                    rozmiar pakietów moge zrobić np średni rozmiar pakießów itp
+                                        Liczba pakietów na sekundę (PPS)
+                                        Ilość danych na sekundę (B/s))
+2. stworze sessions z .json w którym będą się zapisywac all time statystyki do wyśwwietlenia , ale też osobno z danej sesji, 
+te osobne zapisywałyby się w formacie data godzina rozpoczęcia i zakończenia 
+3. wykres słupkowy
+4. wykres liniowy
+5. mapa połączeń ip
+6. automatyczny dump do plików co np 60 sekund
+
+📊 Słupkowy (bar chart)
+Liczba pakietów na protokół 
+
+Możliwość wyboru trybu: z obecnej sesji / z all-time / z konkretnej daty
+
+📉 Liniowy (line chart)
+Liczba pakietów w czasie (co sekundę / co 10 sek / co minuta)
+
+Osobne linie dla TCP, UDP itd.
+
+Wariant: wykres punktowy z jitterem (dla precyzyjnych sesji)
+
+🗺️ Mapa połączeń IP
+Graficzne przedstawienie relacji IP-src → IP-dst
+
+Filtr, podświetla wpisane do filtru ip
+
+Warianty:
+
+Zwykły wykres grafowy (nodes: IP, edges: połączenia)
+
+Lokalizacja geograficzna (GeoIP)
+
+
+
+jak zrobić staty:
+
+-uruchomienie timera , w konstruktorze mainWindow a wyłaczenie gdy wyłączymy nasz program.
+- w handle packet:
+  // 1) Liczba pakietów całkowicie:
+    stats_totalPackets++;
+    stats_packetsLastInterval++;
+
+    // 2) Bajty całkowicie i w tym interwale:
+    quint64 pktSize = static_cast<quint64>(raw.size());
+    stats_totalBytes += pktSize;
+    stats_bytesLastInterval += pktSize;
+
+    // 3) Zliczanie po protokołach:
+    stats_protoCounts[proto] += 1;
+
+    // 4) Unikalne połączenia src→dst:
+    QString srcIP = parts.value(0);
+    QString dstIP = parts.value(1);
+    stats_connections.insert(qMakePair(srcIP, dstIP));
+
+// Parsery do zrobienia
+Warstwa 2 (link layer)
+
+ARP: done
+
+Warstwa 3 (network layer)
+
+IPv4 (ethertype 0x0800): done
+
+IPv6 (ethertype 0x86DD): todo
+
+ICMP (IPv4): done
+
+IGMP: todo
+
+EGP: todo
+
+PIM: todo
+
+RSVP: todo
+
+OSPF (proto 89): todo
+
+PUP: todo
+
+IDP: todo
+
+TP: todo
+
+MTP: todo
+
+Rozszerzenia/protokoły IPv6 (extension headers)
+
+ICMPv6: todo
+
+Hop-by-Hop Options (HOPOPTS): todo
+
+Routing Header: todo
+
+Fragment Header: todo
+
+Destination Options (DSTOPTS): todo
+
+Mobility Header (MH): todo
+
+No Next Header (NONE): todo
+
+Warstwa 4 (transport layer)
+
+TCP: done
+
+UDP: done
+
+SCTP: todo
+
+UDPLITE: todo
+
+Tunelowanie / enkapsulacja
+
+IPv4-in-IPv4 (IPIP, proto 4): todo
+
+GRE: todo
+
+L2TP: todo
+
+MPLS-in-IP (proto 137): todo
+
+ENCAP: todo
+
+BEETPH: todo
+
+Bezpieczeństwo (IPsec i pokrewne)
+
+Authentication Header (AH): todo
+
+Encapsulating Security Payload (ESP): todo
+
+Compression (COMP): todo
+
+Pozostałe / inne
+
+OTHER (wszystkie nieujęte numery protokołów): todo

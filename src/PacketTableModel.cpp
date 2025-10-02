@@ -1,0 +1,68 @@
+#include "PacketTableModel.h"
+
+PacketTableModel::PacketTableModel(QObject *parent)
+    : QAbstractTableModel(parent)
+{
+}
+
+int PacketTableModel::rowCount(const QModelIndex &parent) const
+{
+    if (parent.isValid())
+        return 0;
+    return m_rows.size();
+}
+
+int PacketTableModel::columnCount(const QModelIndex &parent) const
+{
+    if (parent.isValid())
+        return 0;
+    return m_headers.size();
+}
+
+QVariant PacketTableModel::data(const QModelIndex &index, int role) const
+{
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size())
+        return {};
+
+    const PacketTableRow &r = m_rows.at(index.row());
+
+    if (role == Qt::DisplayRole) {
+        return r.columns.value(index.column());
+    }
+    if (role == Qt::UserRole && index.column() == ColumnInfo) {
+        return r.rawData;
+    }
+    if (role == Qt::BackgroundRole && r.background.isValid()) {
+        return r.background;
+    }
+
+    return {};
+}
+
+QVariant PacketTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
+        return m_headers.value(section);
+    }
+    return QAbstractTableModel::headerData(section, orientation, role);
+}
+
+void PacketTableModel::addPacket(const PacketTableRow &row)
+{
+    beginInsertRows(QModelIndex(), m_rows.size(), m_rows.size());
+    m_rows.append(row);
+    endInsertRows();
+}
+
+PacketTableRow PacketTableModel::row(int index) const
+{
+    return m_rows.value(index);
+}
+
+void PacketTableModel::clear()
+{
+    beginResetModel();
+    m_rows.clear();
+    endResetModel();
+}
+
