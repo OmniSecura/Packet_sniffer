@@ -1,21 +1,28 @@
 #include "selectionannotationdialog.h"
 
 #include <QAbstractItemView>
+#include <QAction>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
+#include <QMenu>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QColorDialog>
+#include <QBrush>
 
 #include <algorithm>
+
+namespace {
+const QColor kDefaultHighlightColor(255, 232, 128);
+}
 
 SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary> &packets,
                                                      QWidget *parent)
@@ -46,7 +53,7 @@ SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary
     }
 
     m_packetTable = new QTableWidget(this);
-    m_packetTable->setColumnCount(8);
+    m_packetTable->setColumnCount(7);
     m_packetTable->setHorizontalHeaderLabels({
         tr("No."),
         tr("Time"),
@@ -54,8 +61,7 @@ SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary
         tr("Destination"),
         tr("Protocol"),
         tr("Info"),
-        tr("Tags"),
-        tr("Highlight")
+        tr("Tags")
     });
     m_packetTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_packetTable->horizontalHeader()->setStretchLastSection(true);
@@ -63,11 +69,15 @@ SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary
     m_packetTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_packetTable->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_packetTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_packetTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_packetTable,
+            &QTableWidget::customContextMenuRequested,
+            this,
+            &SelectionAnnotationDialog::showContextMenu);
 
     m_packetTable->setRowCount(m_packets.size());
-    m_packetColors.resize(m_packets.size(), QColor(255, 232, 128));
+    m_packetColors.resize(m_packets.size());
     m_packetTagEdits.resize(m_packets.size());
-    m_packetColorButtons.resize(m_packets.size());
 
     for (int row = 0; row < m_packets.size(); ++row) {
         const PacketSummary &pkt = m_packets.at(row);
@@ -90,13 +100,7 @@ SelectionAnnotationDialog::SelectionAnnotationDialog(const QVector<PacketSummary
         m_packetTagEdits[row] = tagEdit;
         m_packetTable->setCellWidget(row, 6, tagEdit);
 
-        auto *colorButton = new QPushButton(tr("Choose…"), this);
-        m_packetColorButtons[row] = colorButton;
-        updateColorButton(row);
-        m_packetTable->setCellWidget(row, 7, colorButton);
-        connect(colorButton, &QPushButton::clicked, this, [this, row]() {
-            chooseColorForRow(row);
-        });
+        applyRowColor(row);
     }
 
     m_titleEdit = new QLineEdit(this);
@@ -196,18 +200,67 @@ SelectionAnnotationDialog::Result SelectionAnnotationDialog::result() const
     return res;
 }
 
-void SelectionAnnotationDialog::chooseColorForRow(int row)
+void SelectionAnnotationDialog::showContextMenu(const QPoint &pos)
 {
-    if (row < 0 || row >= m_packetColors.size())
+    if (!m_packetTable)
         return;
 
-    const QColor current = m_packetColors.value(row);
-    const QColor chosen = QColorDialog::getColor(current, this, tr("Choose highlight color"));
-    if (!chosen.isValid())
+    const QModelIndex index = m_packetTable->indexAt(pos);
+    if (index.isValid() && !m_packetTable->selectionModel()->isSelected(index)) {
+        m_packetTable->selectionModel()->select(
+            index,
+            QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    }
+
+    const QModelIndexList selectedRows = m_packetTable->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty())
         return;
 
-    m_packetColors[row] = chosen;
-    updateColorButton(row);
+    QMenu menu(this);
+    QAction *highlightAction = menu.addAction(tr("Highlight…"));
+    QAction *clearHighlightAction = menu.addAction(tr("Clear highlight"));
+
+    QAction *chosen = menu.exec(m_packetTable->viewport()->mapToGlobal(pos));
+    if (!chosen)
+        return;
+
+    QList<int> rows;
+    rows.reserve(selectedRows.size());
+    for (const QModelIndex &selected : selectedRows)
+        rows.append(selected.row());
+
+    if (chosen == highlightAction) {
+        QColor initialColor;
+        for (int r : rows) {
+            if (r >= 0 && r < m_packetColors.size()) {
+                initialColor = m_packetColors.at(r);
+                if (initialColor.isValid())
+                    break;
+            }
+        }
+        if (!initialColor.isValid())
+            initialColor = kDefaultHighlightColor;
+
+        const QColor color = QColorDialog::getColor(initialColor,
+                                                    this,
+                                                    tr("Choose highlight color"));
+        if (!color.isValid())
+            return;
+
+        for (int r : rows) {
+            if (r < 0 || r >= m_packetColors.size())
+                continue;
+            m_packetColors[r] = color;
+            applyRowColor(r);
+        }
+    } else if (chosen == clearHighlightAction) {
+        for (int r : rows) {
+            if (r < 0 || r >= m_packetColors.size())
+                continue;
+            m_packetColors[r] = QColor();
+            applyRowColor(r);
+        }
+    }
 }
 
 QStringList SelectionAnnotationDialog::splitTags(const QString &text) const
@@ -238,34 +291,27 @@ QString SelectionAnnotationDialog::defaultTagForThreat() const
     return QString();
 }
 
-void SelectionAnnotationDialog::updateColorButton(int row)
-{
-    if (row < 0 || row >= m_packetColorButtons.size())
-        return;
-
-    QPushButton *button = m_packetColorButtons.at(row);
-    if (!button)
-        return;
-
-    const QColor color = m_packetColors.value(row, QColor(255, 232, 128));
-    const QString textColor = (color.lightness() < 128)
-        ? QStringLiteral("white")
-        : QStringLiteral("black");
-    const QString style = QStringLiteral("background-color: %1; color: %2;")
-                              .arg(color.name())
-                              .arg(textColor);
-    button->setStyleSheet(style);
-
-    applyRowColor(row);
-}
-
 void SelectionAnnotationDialog::applyRowColor(int row)
 {
     if (!m_packetTable || row < 0 || row >= m_packetTable->rowCount())
         return;
 
-    const QColor color = m_packetColors.value(row, QColor(255, 232, 128));
-    const QColor foreground = (color.lightness() < 128) ? QColor(Qt::white) : QColor(Qt::black);
+    const QColor color = m_packetColors.value(row);
+    if (!color.isValid()) {
+        for (int column = 0; column < 6; ++column) {
+            if (auto *item = m_packetTable->item(row, column)) {
+                item->setBackground(QBrush());
+                item->setForeground(QBrush());
+            }
+        }
+        if (auto *tagEdit = m_packetTagEdits.value(row, nullptr))
+            tagEdit->setStyleSheet(QString());
+        return;
+    }
+
+    const QColor foreground = (color.lightness() < 128)
+        ? QColor(Qt::white)
+        : QColor(Qt::black);
 
     for (int column = 0; column < 6; ++column) {
         if (auto *item = m_packetTable->item(row, column)) {

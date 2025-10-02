@@ -6,12 +6,12 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <QPoint>
 
 class QComboBox;
 class QDialogButtonBox;
 class QLabel;
 class QLineEdit;
-class QPushButton;
 class QTextEdit;
 class QTableWidget;
 
@@ -50,18 +50,16 @@ public:
     Result result() const;
 
 private slots:
-    void chooseColorForRow(int row);
+    void showContextMenu(const QPoint &pos);
 
 private:
     QStringList splitTags(const QString &text) const;
     QString defaultTagForThreat() const;
-    void updateColorButton(int row);
     void applyRowColor(int row);
 
     QVector<PacketSummary> m_packets;
     QVector<QColor> m_packetColors;
     QVector<QLineEdit*> m_packetTagEdits;
-    QVector<QPushButton*> m_packetColorButtons;
 
     QLabel *m_summaryLabel;
     QLineEdit *m_titleEdit;
