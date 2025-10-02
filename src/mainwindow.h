@@ -42,6 +42,7 @@
 #include "../packets/packethelpers.h"
 #include "statistics/statsdialog.h"
 #include "statistics/statistics.h"
+#include "statistics/sessionstorage.h"
 #include "statistics/charts/pieChart.h"
 #include "packets/packet_geolocation/geolocation.h"
 #include "packets/packet_geolocation/GeoMap.h"
@@ -87,6 +88,7 @@ private slots:
     void updateProtocolCombo();
     void showOtherThemesDialog();
     void openPreferences();
+    void openSessionManager();
 
 private:
     void setupUI();
@@ -95,6 +97,8 @@ private:
     void addLayerToTree(QTreeWidget *tree, const PacketLayer &lay);
     void saveAnnotationToFile(const PacketAnnotation &annotation);
     void loadPreferences();
+    void persistCurrentSession();
+    bool loadOfflineSession(const SessionStorage::LoadedSession &session);
 
     PacketColorizer packetColorizer;
 

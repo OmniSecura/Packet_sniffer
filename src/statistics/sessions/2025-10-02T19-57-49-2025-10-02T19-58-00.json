@@ -1,0 +1,84 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 86,
+            "bps": 86,
+            "connections": [
+                {
+                    "dst": "ff02::1",
+                    "src": "fe80::3268:93ff:fe68:331"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "ICMPv6": 1
+            },
+            "second": 4
+        },
+        {
+            "avgPacketSize": 50,
+            "bps": 50,
+            "connections": [
+                {
+                    "dst": "224.0.0.1",
+                    "src": "192.168.1.1"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "IGMP": 1
+            },
+            "second": 7
+        },
+        {
+            "avgPacketSize": 80.2,
+            "bps": 401,
+            "connections": [
+                {
+                    "dst": "224.0.0.22",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "35.186.224.45"
+                },
+                {
+                    "dst": "35.186.224.45",
+                    "src": "192.168.1.102"
+                }
+            ],
+            "pps": 5,
+            "protocolCounts": {
+                "IGMP": 1,
+                "TCP": 4
+            },
+            "second": 8
+        },
+        {
+            "avgPacketSize": 145,
+            "bps": 580,
+            "connections": [
+                {
+                    "dst": "104.18.39.21",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "104.18.39.21"
+                },
+                {
+                    "dst": "192.168.1.255",
+                    "src": "192.168.1.1"
+                }
+            ],
+            "pps": 4,
+            "protocolCounts": {
+                "TCP": 3,
+                "UDP": 1
+            },
+            "second": 10
+        }
+    ],
+    "sessionEnd": "2025-10-02T19:58:00",
+    "sessionStart": "2025-10-02T19:57:49"
+}

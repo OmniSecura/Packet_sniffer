@@ -16,40 +16,51 @@
             "second": 2
         },
         {
-            "avgPacketSize": 115.5,
-            "bps": 231,
+            "avgPacketSize": 66,
+            "bps": 66,
             "connections": [
                 {
-                    "dst": "162.159.130.234",
+                    "dst": "20.189.173.27",
                     "src": "192.168.1.102"
-                },
-                {
-                    "dst": "192.168.1.102",
-                    "src": "162.159.130.234"
                 }
             ],
-            "pps": 2,
+            "pps": 1,
             "protocolCounts": {
-                "TCP": 2
+                "TCP": 1
             },
             "second": 3
         },
         {
-            "avgPacketSize": 209,
-            "bps": 209,
+            "avgPacketSize": 66,
+            "bps": 66,
             "connections": [
                 {
-                    "dst": "239.255.255.250",
-                    "src": "192.168.1.102"
+                    "dst": "192.168.1.102",
+                    "src": "20.189.173.27"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "TCP": 1
+            },
+            "second": 4
+        },
+        {
+            "avgPacketSize": 138,
+            "bps": 138,
+            "connections": [
+                {
+                    "dst": "ff02::1:2",
+                    "src": "fe80::ef44:1662:f50a:459"
                 }
             ],
             "pps": 1,
             "protocolCounts": {
                 "UDP": 1
             },
-            "second": 5
+            "second": 6
         }
     ],
-    "sessionEnd": "2025-10-02T19:33:45",
-    "sessionStart": "2025-10-02T19:33:39"
+    "sessionEnd": "2025-10-02T19:58:18",
+    "sessionStart": "2025-10-02T19:58:12"
 }

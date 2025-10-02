@@ -29,9 +29,8 @@ void MainWindow::startSniffing() {
     }
     statsTimer = new QTimer(this);
     connect(statsTimer, &QTimer::timeout, this, [this]() {
-        const QString statsDir = "src/statistics/sessions";
         if (stats) {
-            stats->SaveStatsToJson(statsDir);
+            stats->SaveStatsToJson(Statistics::defaultSessionsDir());
         }
     });
     statsTimer->start(1000);
@@ -76,8 +75,7 @@ void MainWindow::stopSniffing() {
         statsTimer = nullptr;
     }
     if (stats) {
-        const QString statsDir = "src/statistics/sessions";
-        stats->SaveStatsToJson(statsDir);
+        persistCurrentSession();
         stats.reset();
     }
 }
