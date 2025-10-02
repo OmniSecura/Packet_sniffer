@@ -19,6 +19,7 @@ SOURCES += \
     src/gui/mainwindow_ui.cpp \
     src/gui/mainwindow_sniffing.cpp \
     src/gui/mainwindow_packets.cpp \
+    src/statistics/geooverviewdialog.cpp \
     src/statistics/statsdialog.cpp \
     src/statistics/charts/barChart.cpp \
     src/statistics/charts/lineChart.cpp \
@@ -44,6 +45,7 @@ HEADERS += \
     src/gui/mainwindow_ui.h \
     src/gui/mainwindow_sniffing.h \
     src/gui/mainwindow_packets.h \
+    src/statistics/geooverviewdialog.h \
     src/theme/ui_otherthemesdialog.h \
     src/statistics/statsdialog.h \
     src/statistics/charts/barChart.h \

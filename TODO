@@ -139,3 +139,7 @@ Compression (COMP): todo
 Pozostałe / inne
 
 OTHER (wszystkie nieujęte numery protokołów): todo
+
+
+# Dodać możliwośc zaznaczania konkretnej sekwencji pakietów/ pakietów pod rząd, opisanie ich , pokolorowanie, otagowanie jako bezpieczne/niebezpieczne/malware/... i tym podobne.
+# Później w reporting będzie się dało odtworzyć konkretne zaznaczone sekwencje i tam tez będzie się dało je opisać.
