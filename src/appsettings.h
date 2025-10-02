@@ -13,6 +13,9 @@ public:
     QString defaultInterface() const;
     void setDefaultInterface(const QString &iface);
 
+    QString lastUsedInterface() const;
+    void setLastUsedInterface(const QString &iface);
+
     bool autoStartCapture() const;
     void setAutoStartCapture(bool enabled);
 

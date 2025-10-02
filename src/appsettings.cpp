@@ -7,6 +7,7 @@ namespace {
 constexpr const char *kOrganization = "Engineering";
 constexpr const char *kApplication  = "PacketSniffer";
 constexpr const char *kDefaultInterfaceKey = "Preferences/DefaultInterface";
+constexpr const char *kLastInterfaceKey    = "State/LastInterface";
 constexpr const char *kAutoStartKey        = "Preferences/AutoStartCapture";
 constexpr const char *kThemeKey            = "Theme";
 constexpr const char *kReportsDirKey       = "Preferences/ReportsDirectory";
@@ -31,6 +32,14 @@ QString AppSettings::defaultInterface() const {
 
 void AppSettings::setDefaultInterface(const QString &iface) {
     settings().setValue(kDefaultInterfaceKey, iface);
+}
+
+QString AppSettings::lastUsedInterface() const {
+    return settings().value(kLastInterfaceKey).toString();
+}
+
+void AppSettings::setLastUsedInterface(const QString &iface) {
+    settings().setValue(kLastInterfaceKey, iface);
 }
 
 bool AppSettings::autoStartCapture() const {

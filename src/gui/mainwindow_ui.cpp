@@ -251,6 +251,14 @@ void MainWindow::listInterfaces() {
             return;
         }
     }
+    const QString lastUsed = appSettings.lastUsedInterface();
+    if (!lastUsed.isEmpty()) {
+        const int index = ifaceBox->findText(lastUsed);
+        if (index != -1) {
+            ifaceBox->setCurrentIndex(index);
+            return;
+        }
+    }
     if (ifaceBox->count() > 0) {
         ifaceBox->setCurrentIndex(0);
     }
