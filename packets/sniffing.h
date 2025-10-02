@@ -5,11 +5,21 @@
 #include "src/packetworker.h"
 #include "protocols/proto_struct.h"
 #include <arpa/inet.h>
-#include <netinet/if_ether.h> 
+#include <netinet/if_ether.h>
 #include <QByteArray>
 #include <QStringList>
 #include <QVector>
 #include <QMutex>
+
+#ifndef DLT_EN10MB
+#define DLT_EN10MB 1
+#endif
+#ifndef DLT_LINUX_SLL
+#define DLT_LINUX_SLL 113
+#endif
+#ifndef DLT_LINUX_SLL2
+#define DLT_LINUX_SLL2 276
+#endif
 
 struct ProtoField {
     QString category;   // "Header", "Options", "Checksum"…
@@ -68,10 +78,14 @@ public:
 
     //I will use this to save my packet sniffing session later
     static QVector<QByteArray> packetBuffer;
-    static QMutex packetMutex; 
+    static QMutex packetMutex;
     static void appendPacket(const QByteArray &raw);
     static const QVector<QByteArray>& getAllPackets();
     void clearBuffer();
+
+    static void setLinkLayer(int linkType);
+    static int  linkHeaderLength();
+    static int  linkType();
 
 };
 

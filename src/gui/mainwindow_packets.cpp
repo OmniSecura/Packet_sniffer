@@ -72,7 +72,7 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
     const int iphdr = (et == ETHERTYPE_IP
                        ? IP_HL(ipv4Hdr(pkt)) * 4
                        : 0);
-    const int header_len = SIZE_ETHERNET + iphdr;
+    const int header_len = linkHdrLen() + iphdr;
     const QByteArray payload = raw.mid(header_len);
     hexEdit->setPlainText(
         parser.toHexAscii(

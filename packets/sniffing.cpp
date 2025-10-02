@@ -2,10 +2,61 @@
 #include "packethelpers.h"
 #include <ctype.h>
 #include <QMutexLocker>
+#include <atomic>
+#include <linux/if_packet.h>
 
-#ifndef IPPROTO_OSPFIGP
-#define IPPROTO_OSPFIGP 89
-#endif
+namespace {
+std::atomic<int> g_linkType{DLT_EN10MB};
+std::atomic<int> g_linkHdrLen{SIZE_ETHERNET};
+
+int computeLinkHeaderLen(int linkType) {
+    switch (linkType) {
+        case DLT_LINUX_SLL:
+            return LINUX_SLL_HEADER_LEN;
+        default:
+            return SIZE_ETHERNET;
+    }
+}
+
+QString packetTypeToString(uint16_t type) {
+    switch (type) {
+        case PACKET_HOST:       return QStringLiteral("HOST");
+        case PACKET_BROADCAST:  return QStringLiteral("BROADCAST");
+        case PACKET_MULTICAST:  return QStringLiteral("MULTICAST");
+        case PACKET_OTHERHOST:  return QStringLiteral("OTHERHOST");
+        case PACKET_OUTGOING:   return QStringLiteral("OUTGOING");
+        case PACKET_FASTROUTE:  return QStringLiteral("FASTROUTE");
+        default:
+            return QString::number(type);
+    }
+}
+
+QString cookedAddressToString(const sniff_linux_cooked *hdr) {
+    const int addrLen = qMin<int>(ntohs(hdr->addr_len), int(sizeof hdr->addr));
+    if (addrLen <= 0)
+        return QStringLiteral("-");
+
+    QStringList parts;
+    parts.reserve(addrLen);
+    for (int i = 0; i < addrLen; ++i) {
+        parts << QStringLiteral("%1").arg(hdr->addr[i], 2, 16, QLatin1Char('0')).toUpper();
+    }
+    return parts.join(QLatin1Char(':'));
+}
+}
+
+void Sniffing::setLinkLayer(int linkType) {
+    g_linkType.store(linkType, std::memory_order_relaxed);
+    g_linkHdrLen.store(computeLinkHeaderLen(linkType), std::memory_order_relaxed);
+}
+
+int Sniffing::linkHeaderLength() {
+    return g_linkHdrLen.load(std::memory_order_relaxed);
+}
+
+int Sniffing::linkType() {
+    return g_linkType.load(std::memory_order_relaxed);
+}
 
 Sniffing::Sniffing() {}
 Sniffing::~Sniffing() {}
@@ -170,8 +221,7 @@ QStringList Sniffing::parseArp(const u_char *pkt) const {
 }
 
 QStringList Sniffing::parseTcp(const u_char *pkt) const {
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
     
     const sniff_tcp *tcp = nullptr;
     char buf6[INET6_ADDRSTRLEN];
@@ -235,8 +285,7 @@ QStringList Sniffing::parseTcp(const u_char *pkt) const {
 }
 
 QStringList Sniffing::parseUdp(const u_char *pkt) const {
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     const sniff_udp *udp = nullptr;
     char buf[INET_ADDRSTRLEN];
@@ -433,8 +482,7 @@ QStringList Sniffing::parseIgmp(const u_char *pkt) const {
 
 QStringList Sniffing::parseSctp(const u_char *pkt) const {
     const sniff_sctp *sctp = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         sctp = reinterpret_cast<const sniff_sctp*>(ipv4Payload(pkt));
@@ -457,8 +505,7 @@ QStringList Sniffing::parseSctp(const u_char *pkt) const {
 
 QStringList Sniffing::parseUdplite(const u_char *pkt) const {
     const sniff_udplite *udplite = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         udplite = reinterpret_cast<const sniff_udplite*>(ipv4Payload(pkt));
@@ -481,8 +528,7 @@ QStringList Sniffing::parseUdplite(const u_char *pkt) const {
 
 QStringList Sniffing::parseGre(const u_char *pkt) const {
     const sniff_gre *gre = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         gre = reinterpret_cast<const sniff_gre*>(ipv4Payload(pkt));
@@ -524,8 +570,7 @@ QStringList Sniffing::parseOspf(const u_char *pkt) const {
 
 QStringList Sniffing::parseRsvp(const u_char *pkt) const {
     const sniff_rsvp *rsvp = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         rsvp = reinterpret_cast<const sniff_rsvp*>(ipv4Payload(pkt));
@@ -549,8 +594,7 @@ QStringList Sniffing::parseRsvp(const u_char *pkt) const {
 
 QStringList Sniffing::parsePim(const u_char *pkt) const {
     const sniff_pim *pim = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         pim = reinterpret_cast<const sniff_pim*>(ipv4Payload(pkt));
@@ -591,8 +635,7 @@ QStringList Sniffing::parseEgp(const u_char *pkt) const {
 
 QStringList Sniffing::parseAh(const u_char *pkt) const {
     const sniff_ipsec_ah *ah = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv4Payload(pkt));
@@ -615,8 +658,7 @@ QStringList Sniffing::parseAh(const u_char *pkt) const {
 
 QStringList Sniffing::parseEsp(const u_char *pkt) const {
     const sniff_ipsec_esp *esp = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv4Payload(pkt));
@@ -637,8 +679,7 @@ QStringList Sniffing::parseEsp(const u_char *pkt) const {
 
 QStringList Sniffing::parseMpls(const u_char *pkt) const {
     const sniff_mpls *mpls = nullptr;
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     if (ethertype == ETHERTYPE_IP) {
         mpls = reinterpret_cast<const sniff_mpls*>(ipv4Payload(pkt));
@@ -751,26 +792,58 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
     QVector<PacketLayer> layers;
     ProtoField field;
 
-    // --- Ethernet II ---
-    const auto eth = ethHdr(pkt);
-    PacketLayer ethLayer;
-    ethLayer.name = "Ethernet II";
+    const int linkType = Sniffing::linkType();
 
-    field.category = "Frame Header";
-    field.label    = "Src";
-    field.value    = macToStr(eth->ether_shost);
-    ethLayer.fields.append(field);
+    if (linkType == DLT_LINUX_SLL) {
+        const auto cooked = cookedHdr(pkt);
+        PacketLayer cookedLayer;
+        cookedLayer.name = QStringLiteral("Linux Cooked Capture");
 
-    field.label    = "Dst";
-    field.value    = macToStr(eth->ether_dhost);
-    ethLayer.fields.append(field);
+        field.category = QStringLiteral("Pseudo Header");
+        field.label    = QStringLiteral("Packet Type");
+        field.value    = packetTypeToString(ntohs(cooked->packet_type));
+        cookedLayer.fields.append(field);
 
-    field.label    = "Type";
-    field.value    = QString("0x%1")
-                     .arg(ntohs(eth->ether_type), 4, 16, QChar('0'));
-    ethLayer.fields.append(field);
+        field.label    = QStringLiteral("ARPHRD Type");
+        field.value    = QString::number(ntohs(cooked->arphrd_type));
+        cookedLayer.fields.append(field);
 
-    layers.append(ethLayer);
+        field.label    = QStringLiteral("Address");
+        field.value    = cookedAddressToString(cooked);
+        cookedLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Address Length");
+        field.value    = QString::number(ntohs(cooked->addr_len));
+        cookedLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Protocol");
+        field.value    = QStringLiteral("0x%1")
+                          .arg(ntohs(cooked->protocol), 4, 16, QLatin1Char('0'));
+        cookedLayer.fields.append(field);
+
+        layers.append(cookedLayer);
+    }
+    else {
+        const auto eth = ethHdr(pkt);
+        PacketLayer ethLayer;
+        ethLayer.name = QStringLiteral("Ethernet II");
+
+        field.category = QStringLiteral("Frame Header");
+        field.label    = QStringLiteral("Src");
+        field.value    = macToStr(eth->ether_shost);
+        ethLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Dst");
+        field.value    = macToStr(eth->ether_dhost);
+        ethLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Type");
+        field.value    = QStringLiteral("0x%1")
+                           .arg(ntohs(eth->ether_type), 4, 16, QLatin1Char('0'));
+        ethLayer.fields.append(field);
+
+        layers.append(ethLayer);
+    }
 
     uint16_t et = ethType(pkt);
 
@@ -1369,7 +1442,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
 
 
 void Sniffing::saveToPcap(const QString &filePath) {
-    pcap_t *pcap = pcap_open_dead(DLT_EN10MB, 65535);
+    pcap_t *pcap = pcap_open_dead(Sniffing::linkType(), 65535);
     pcap_dumper_t *dumper = pcap_dump_open(pcap, filePath.toUtf8().constData());
 
     timeval ts;
@@ -1395,6 +1468,8 @@ void Sniffing::openFromPcap(const QString &filePath) {
         qWarning("Failed to open pcap file: %s", errbuf);
         return;
     }
+
+    Sniffing::setLinkLayer(pcap_datalink(handle));
 
     const u_char *raw;
     struct pcap_pkthdr *header;
