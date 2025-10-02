@@ -5,11 +5,21 @@
 #include "src/packetworker.h"
 #include "protocols/proto_struct.h"
 #include <arpa/inet.h>
-#include <netinet/if_ether.h> 
+#include <netinet/if_ether.h>
 #include <QByteArray>
 #include <QStringList>
 #include <QVector>
 #include <QMutex>
+
+#ifndef DLT_EN10MB
+#define DLT_EN10MB 1
+#endif
+#ifndef DLT_LINUX_SLL
+#define DLT_LINUX_SLL 113
+#endif
+#ifndef DLT_LINUX_SLL2
+#define DLT_LINUX_SLL2 276
+#endif
 
 struct ProtoField {
     QString category;   // "Header", "Options", "Checksum"…
@@ -37,6 +47,24 @@ public:
     QStringList parseTcp(const u_char *pkt) const;
     QStringList parseUdp(const u_char *pkt) const;
     QStringList parseIcmp(const u_char *pkt) const;
+    QStringList parseIcmpv6(const u_char *pkt) const;
+    QStringList parseIgmp(const u_char *pkt) const;
+    QStringList parseSctp(const u_char *pkt) const;
+    QStringList parseUdplite(const u_char *pkt) const;
+    QStringList parseGre(const u_char *pkt) const;
+    QStringList parseOspf(const u_char *pkt) const;
+    QStringList parseRsvp(const u_char *pkt) const;
+    QStringList parsePim(const u_char *pkt) const;
+    QStringList parseEgp(const u_char *pkt) const;
+    QStringList parseAh(const u_char *pkt) const;
+    QStringList parseEsp(const u_char *pkt) const;
+    QStringList parseMpls(const u_char *pkt) const;
+    QStringList parseIpip(const u_char *pkt) const;
+    QStringList parseIpv6HopByHop(const u_char *pkt) const;
+    QStringList parseIpv6Routing(const u_char *pkt) const;
+    QStringList parseIpv6Fragment(const u_char *pkt) const;
+    QStringList parseIpv6Destination(const u_char *pkt) const;
+    QStringList parseIpv6Mobility(const u_char *pkt) const;
     // ================
 
     QVector<PacketLayer> parseLayers(const u_char* pkt) const;
@@ -50,10 +78,14 @@ public:
 
     //I will use this to save my packet sniffing session later
     static QVector<QByteArray> packetBuffer;
-    static QMutex packetMutex; 
+    static QMutex packetMutex;
     static void appendPacket(const QByteArray &raw);
     static const QVector<QByteArray>& getAllPackets();
     void clearBuffer();
+
+    static void setLinkLayer(int linkType);
+    static int  linkHeaderLength();
+    static int  linkType();
 
 };
 

@@ -7,78 +7,89 @@
 #include <QString>
 #include <arpa/inet.h>
 
-static constexpr int LINKHDR_LEN = SIZE_ETHERNET;
+inline int linkHdrLen() {
+    return Sniffing::linkHeaderLength();
+}
+
+inline const sniff_linux_cooked* cookedHdr(const u_char* pkt) {
+    return reinterpret_cast<const sniff_linux_cooked*>(pkt);
+}
 
 // Ethernet
 inline const sniff_ethernet* ethHdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_ethernet*>(pkt);
 }
 inline uint16_t ethType(const u_char* pkt) {
-    return ntohs( ethHdr(pkt)->ether_type );
+    switch (Sniffing::linkType()) {
+        case DLT_LINUX_SLL:
+            return ntohs(cookedHdr(pkt)->protocol);
+        default:
+            return ntohs(ethHdr(pkt)->ether_type);
+    }
 }
 
 // ARP
 inline const sniff_arp* arpHdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_arp*>(pkt + LINKHDR_LEN);
+    return reinterpret_cast<const sniff_arp*>(pkt + linkHdrLen());
 }
 
 // IPv4
 inline const sniff_ip* ipv4Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ip*>(pkt + LINKHDR_LEN);
+    return reinterpret_cast<const sniff_ip*>(pkt + linkHdrLen());
 }
 inline int ipv4HdrLen(const u_char* pkt) {
     const auto ip = ipv4Hdr(pkt);
     return IP_HL(ip) * 4;
 }
 inline const u_char* ipv4Payload(const u_char* pkt) {
-    return pkt + LINKHDR_LEN + ipv4HdrLen(pkt);
+    return pkt + linkHdrLen() + ipv4HdrLen(pkt);
 }
 
-// TCP 
+// TCP
 inline const sniff_tcp* tcpHdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHdrLen() + ipv4HdrLen(pkt)
     );
 }
 
-// UDP 
+// UDP
 inline const sniff_udp* udpHdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHdrLen() + ipv4HdrLen(pkt)
     );
 }
 
 // ICMP
 inline const sniff_icmp* icmpHdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_icmp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHdrLen() + ipv4HdrLen(pkt)
     );
 }
 
 
 // IPv6
 inline const sniff_ipv6* ipv6Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ipv6*>(pkt + LINKHDR_LEN);
+    return reinterpret_cast<const sniff_ipv6*>(pkt + linkHdrLen());
 }
 inline const u_char* ipv6Payload(const u_char* pkt) {
-    return pkt + LINKHDR_LEN + sizeof(sniff_ipv6);
+    return pkt + linkHdrLen() + sizeof(sniff_ipv6);
 }
 
 inline const sniff_tcp* tcp6Hdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHdrLen() + sizeof(sniff_ipv6)
     );
 }
 
 inline const sniff_udp* udp6Hdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHdrLen() + sizeof(sniff_ipv6)
     );
 }
 
 inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_icmpv6*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHdrLen() + sizeof(sniff_ipv6)
     );
 }
 // MAC → QString

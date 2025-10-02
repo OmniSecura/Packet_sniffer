@@ -1,0 +1,246 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 85.33333333333333,
+            "bps": 256,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 3,
+            "protocolCounts": {
+                "OTHER": 3
+            },
+            "second": 4
+        },
+        {
+            "avgPacketSize": 332,
+            "bps": 332,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "OTHER": 1
+            },
+            "second": 5
+        },
+        {
+            "avgPacketSize": 81.5,
+            "bps": 326,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 4,
+            "protocolCounts": {
+                "OTHER": 4
+            },
+            "second": 6
+        },
+        {
+            "avgPacketSize": 85.33333333333333,
+            "bps": 256,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 3,
+            "protocolCounts": {
+                "OTHER": 3
+            },
+            "second": 7
+        },
+        {
+            "avgPacketSize": 88,
+            "bps": 88,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "OTHER": 1
+            },
+            "second": 8
+        },
+        {
+            "avgPacketSize": 125.42857142857143,
+            "bps": 878,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 7,
+            "protocolCounts": {
+                "OTHER": 7
+            },
+            "second": 10
+        },
+        {
+            "avgPacketSize": 902.4444444444445,
+            "bps": 8122,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 9,
+            "protocolCounts": {
+                "OTHER": 9
+            },
+            "second": 11
+        },
+        {
+            "avgPacketSize": 146.42857142857142,
+            "bps": 1025,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 7,
+            "protocolCounts": {
+                "OTHER": 7
+            },
+            "second": 12
+        },
+        {
+            "avgPacketSize": 68,
+            "bps": 136,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 2,
+            "protocolCounts": {
+                "OTHER": 2
+            },
+            "second": 13
+        },
+        {
+            "avgPacketSize": 68,
+            "bps": 136,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 2,
+            "protocolCounts": {
+                "OTHER": 2
+            },
+            "second": 14
+        },
+        {
+            "avgPacketSize": 1009,
+            "bps": 2018,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 2,
+            "protocolCounts": {
+                "OTHER": 2
+            },
+            "second": 15
+        },
+        {
+            "avgPacketSize": 145.5,
+            "bps": 873,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 6,
+            "protocolCounts": {
+                "OTHER": 6
+            },
+            "second": 16
+        },
+        {
+            "avgPacketSize": 68,
+            "bps": 68,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "OTHER": 1
+            },
+            "second": 17
+        },
+        {
+            "avgPacketSize": 327.25,
+            "bps": 7854,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 24,
+            "protocolCounts": {
+                "OTHER": 24
+            },
+            "second": 18
+        },
+        {
+            "avgPacketSize": 1083.275590551181,
+            "bps": 137576,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 127,
+            "protocolCounts": {
+                "OTHER": 127
+            },
+            "second": 19
+        },
+        {
+            "avgPacketSize": 596.0172413793103,
+            "bps": 34569,
+            "connections": [
+                {
+                    "dst": "-",
+                    "src": "-"
+                }
+            ],
+            "pps": 58,
+            "protocolCounts": {
+                "OTHER": 58
+            },
+            "second": 20
+        }
+    ],
+    "sessionEnd": "2025-10-02T21:12:53",
+    "sessionStart": "2025-10-02T21:12:33"
+}

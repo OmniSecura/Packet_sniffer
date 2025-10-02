@@ -33,6 +33,8 @@ void PacketWorker::process() {
         return;
     }
 
+    Sniffing::setLinkLayer(pcap_datalink(m_handle.get()));
+
     // 2) compile & set filter via Filters
     Filters flt;
     flt.netmask_lookup(m_iface.toStdString(), errbuf);

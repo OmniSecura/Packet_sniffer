@@ -1,7 +1,62 @@
 #include "sniffing.h"
 #include "packethelpers.h"
-#include <ctype.h> 
+#include <ctype.h>
 #include <QMutexLocker>
+#include <atomic>
+#include <linux/if_packet.h>
+
+namespace {
+std::atomic<int> g_linkType{DLT_EN10MB};
+std::atomic<int> g_linkHdrLen{SIZE_ETHERNET};
+
+int computeLinkHeaderLen(int linkType) {
+    switch (linkType) {
+        case DLT_LINUX_SLL:
+            return LINUX_SLL_HEADER_LEN;
+        default:
+            return SIZE_ETHERNET;
+    }
+}
+
+QString packetTypeToString(uint16_t type) {
+    switch (type) {
+        case PACKET_HOST:       return QStringLiteral("HOST");
+        case PACKET_BROADCAST:  return QStringLiteral("BROADCAST");
+        case PACKET_MULTICAST:  return QStringLiteral("MULTICAST");
+        case PACKET_OTHERHOST:  return QStringLiteral("OTHERHOST");
+        case PACKET_OUTGOING:   return QStringLiteral("OUTGOING");
+        case PACKET_FASTROUTE:  return QStringLiteral("FASTROUTE");
+        default:
+            return QString::number(type);
+    }
+}
+
+QString cookedAddressToString(const sniff_linux_cooked *hdr) {
+    const int addrLen = qMin<int>(ntohs(hdr->addr_len), int(sizeof hdr->addr));
+    if (addrLen <= 0)
+        return QStringLiteral("-");
+
+    QStringList parts;
+    parts.reserve(addrLen);
+    for (int i = 0; i < addrLen; ++i) {
+        parts << QStringLiteral("%1").arg(hdr->addr[i], 2, 16, QLatin1Char('0')).toUpper();
+    }
+    return parts.join(QLatin1Char(':'));
+}
+}
+
+void Sniffing::setLinkLayer(int linkType) {
+    g_linkType.store(linkType, std::memory_order_relaxed);
+    g_linkHdrLen.store(computeLinkHeaderLen(linkType), std::memory_order_relaxed);
+}
+
+int Sniffing::linkHeaderLength() {
+    return g_linkHdrLen.load(std::memory_order_relaxed);
+}
+
+int Sniffing::linkType() {
+    return g_linkType.load(std::memory_order_relaxed);
+}
 
 Sniffing::Sniffing() {}
 Sniffing::~Sniffing() {}
@@ -166,8 +221,7 @@ QStringList Sniffing::parseArp(const u_char *pkt) const {
 }
 
 QStringList Sniffing::parseTcp(const u_char *pkt) const {
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
     
     const sniff_tcp *tcp = nullptr;
     char buf6[INET6_ADDRSTRLEN];
@@ -231,8 +285,7 @@ QStringList Sniffing::parseTcp(const u_char *pkt) const {
 }
 
 QStringList Sniffing::parseUdp(const u_char *pkt) const {
-    auto eth = ethHdr(pkt);
-    uint16_t ethertype = ntohs(eth->ether_type);
+    uint16_t ethertype = ethType(pkt);
 
     const sniff_udp *udp = nullptr;
     char buf[INET_ADDRSTRLEN];
@@ -356,31 +409,441 @@ QStringList Sniffing::parseIcmp(const u_char *pkt) const {
     return out;
 }
 
+QStringList Sniffing::parseIcmpv6(const u_char *pkt) const {
+    auto icmp6 = icmp6Hdr(pkt);
+    if (!icmp6) return {};
+
+    uint8_t type = icmp6->icmp6_type;
+    uint8_t code = icmp6->icmp6_code;
+    uint16_t checksum = ntohs(icmp6->icmp6_cksum);
+
+    QString message;
+    switch (type) {
+        case 1:  message = "Destination Unreachable"; break;
+        case 2:  message = "Packet Too Big"; break;
+        case 3:  message = "Time Exceeded"; break;
+        case 4:  message = "Parameter Problem"; break;
+        case 128: message = "Echo Request"; break;
+        case 129: message = "Echo Reply"; break;
+        case 130: message = "Multicast Listener Query"; break;
+        case 131: message = "Multicast Listener Report"; break;
+        case 132: message = "Multicast Listener Done"; break;
+        case 133: message = "Router Solicitation"; break;
+        case 134: message = "Router Advertisement"; break;
+        case 135: message = "Neighbor Solicitation"; break;
+        case 136: message = "Neighbor Advertisement"; break;
+        case 137: message = "Redirect"; break;
+        default: message = "Unknown"; break;
+    }
+
+    uint16_t identifier = 0;
+    uint16_t sequence   = 0;
+    if (type == 128 || type == 129) {
+        identifier = ntohs(icmp6->icmp6_data.echo.id);
+        sequence   = ntohs(icmp6->icmp6_data.echo.seq);
+    }
+
+    QStringList out;
+    out << QString::number(type)
+        << QString::number(code)
+        << QStringLiteral("0x%1").arg(checksum, 4, 16, QLatin1Char('0')).toUpper()
+        << QString::number(identifier)
+        << QString::number(sequence)
+        << message;
+
+    return out;
+}
+
+QStringList Sniffing::parseIgmp(const u_char *pkt) const {
+    auto igmp = reinterpret_cast<const sniff_igmpv1v2*>(ipv4Payload(pkt));
+    if (!igmp) return {};
+
+    uint8_t type = igmp->type;
+    QString typeName;
+    switch (type) {
+        case 0x11: typeName = "Membership Query"; break;
+        case 0x12: typeName = "Membership Report v1"; break;
+        case 0x16: typeName = "Membership Report v2"; break;
+        case 0x17: typeName = "Leave Group"; break;
+        default:   typeName = "Unknown"; break;
+    }
+
+    QString groupAddr = QString::fromLatin1(inet_ntoa(igmp->group_addr));
+
+    QStringList out;
+    out << QString::number(type)
+        << typeName
+        << QString::number(igmp->mrt)
+        << QStringLiteral("0x%1").arg(ntohs(igmp->cksum), 4, 16, QLatin1Char('0')).toUpper()
+        << groupAddr;
+
+    return out;
+}
+
+QStringList Sniffing::parseSctp(const u_char *pkt) const {
+    const sniff_sctp *sctp = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        sctp = reinterpret_cast<const sniff_sctp*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        sctp = reinterpret_cast<const sniff_sctp*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!sctp) return {};
+
+    QStringList out;
+    out << QString::number(ntohs(sctp->src_port))
+        << QString::number(ntohs(sctp->dst_port))
+        << QStringLiteral("0x%1").arg(ntohl(sctp->verification_tag), 8, 16, QLatin1Char('0')).toUpper()
+        << QStringLiteral("0x%1").arg(ntohl(sctp->checksum), 8, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
+QStringList Sniffing::parseUdplite(const u_char *pkt) const {
+    const sniff_udplite *udplite = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        udplite = reinterpret_cast<const sniff_udplite*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        udplite = reinterpret_cast<const sniff_udplite*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!udplite) return {};
+
+    QStringList out;
+    out << QString::number(ntohs(udplite->src_port))
+        << QString::number(ntohs(udplite->dst_port))
+        << QString::number(ntohs(udplite->checksum_cov))
+        << QStringLiteral("0x%1").arg(ntohs(udplite->checksum), 4, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
+QStringList Sniffing::parseGre(const u_char *pkt) const {
+    const sniff_gre *gre = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        gre = reinterpret_cast<const sniff_gre*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        gre = reinterpret_cast<const sniff_gre*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!gre) return {};
+
+    uint16_t flagsVersion = ntohs(gre->flags_version);
+    uint16_t protocol     = ntohs(gre->protocol);
+    uint8_t version       = flagsVersion & 0x7;
+
+    QStringList out;
+    out << QStringLiteral("0x%1").arg(flagsVersion, 4, 16, QLatin1Char('0')).toUpper()
+        << QString::number(version)
+        << QStringLiteral("0x%1").arg(protocol, 4, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
+QStringList Sniffing::parseOspf(const u_char *pkt) const {
+    auto ospf = reinterpret_cast<const sniff_ospf*>(ipv4Payload(pkt));
+    if (!ospf) return {};
+
+    QStringList out;
+    out << QString::number(ospf->version)
+        << QString::number(ospf->type)
+        << QString::number(ntohs(ospf->length))
+        << QString::fromLatin1(inet_ntoa(ospf->router_id))
+        << QString::fromLatin1(inet_ntoa(ospf->area_id))
+        << QStringLiteral("0x%1").arg(ntohs(ospf->checksum), 4, 16, QLatin1Char('0')).toUpper()
+        << QString::number(ntohs(ospf->autype));
+
+    return out;
+}
+
+QStringList Sniffing::parseRsvp(const u_char *pkt) const {
+    const sniff_rsvp *rsvp = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!rsvp) return {};
+
+    QStringList out;
+    out << QString::number(rsvp->ver_flags >> 4)
+        << QString::number(rsvp->msg_type)
+        << QStringLiteral("0x%1").arg(ntohs(rsvp->checksum), 4, 16, QLatin1Char('0')).toUpper()
+        << QString::number(rsvp->send_ttl)
+        << QString::number(ntohs(rsvp->length));
+
+    return out;
+}
+
+QStringList Sniffing::parsePim(const u_char *pkt) const {
+    const sniff_pim *pim = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        pim = reinterpret_cast<const sniff_pim*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        pim = reinterpret_cast<const sniff_pim*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!pim) return {};
+
+    uint8_t version = pim->ver_type >> 4;
+    uint8_t type    = pim->ver_type & 0x0F;
+
+    QStringList out;
+    out << QString::number(version)
+        << QString::number(type)
+        << QStringLiteral("0x%1").arg(ntohs(pim->checksum), 4, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
+QStringList Sniffing::parseEgp(const u_char *pkt) const {
+    auto egp = reinterpret_cast<const sniff_egp*>(ipv4Payload(pkt));
+    if (!egp) return {};
+
+    QStringList out;
+    out << QString::number(egp->version)
+        << QString::number(egp->type)
+        << QString::number(egp->code)
+        << QString::number(egp->status)
+        << QStringLiteral("0x%1").arg(ntohs(egp->checksum), 4, 16, QLatin1Char('0')).toUpper()
+        << QString::number(ntohs(egp->autonomous_system))
+        << QString::number(ntohs(egp->sequence));
+
+    return out;
+}
+
+QStringList Sniffing::parseAh(const u_char *pkt) const {
+    const sniff_ipsec_ah *ah = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!ah) return {};
+
+    QStringList out;
+    out << QString::number(ah->next_header)
+        << QString::number(ah->payload_len)
+        << QStringLiteral("0x%1").arg(ntohl(ah->spi), 8, 16, QLatin1Char('0')).toUpper()
+        << QString::number(ntohl(ah->seq_no));
+
+    return out;
+}
+
+QStringList Sniffing::parseEsp(const u_char *pkt) const {
+    const sniff_ipsec_esp *esp = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!esp) return {};
+
+    QStringList out;
+    out << QStringLiteral("0x%1").arg(ntohl(esp->spi), 8, 16, QLatin1Char('0')).toUpper()
+        << QString::number(ntohl(esp->seq_no));
+
+    return out;
+}
+
+QStringList Sniffing::parseMpls(const u_char *pkt) const {
+    const sniff_mpls *mpls = nullptr;
+    uint16_t ethertype = ethType(pkt);
+
+    if (ethertype == ETHERTYPE_IP) {
+        mpls = reinterpret_cast<const sniff_mpls*>(ipv4Payload(pkt));
+    } else if (ethertype == ETHERTYPE_IPV6) {
+        mpls = reinterpret_cast<const sniff_mpls*>(ipv6Payload(pkt));
+    } else {
+        return {};
+    }
+
+    if (!mpls) return {};
+
+    uint32_t entry = ntohl(mpls->label_stack_entry);
+    uint32_t label = entry >> 12;
+    uint8_t tc     = (entry >> 9) & 0x07;
+    uint8_t s      = (entry >> 8) & 0x01;
+    uint8_t ttl    = entry & 0xFF;
+
+    QStringList out;
+    out << QString::number(label)
+        << QString::number(tc)
+        << QString::number(s)
+        << QString::number(ttl);
+
+    return out;
+}
+
+QStringList Sniffing::parseIpip(const u_char *pkt) const {
+    auto innerIp = reinterpret_cast<const sniff_ip*>(ipv4Payload(pkt));
+    if (!innerIp) return {};
+
+    QStringList out;
+    out << QString::fromLatin1(inet_ntoa(innerIp->ip_src))
+        << QString::fromLatin1(inet_ntoa(innerIp->ip_dst))
+        << QString::number(innerIp->ip_p)
+        << QString::number(ntohs(innerIp->ip_len));
+
+    return out;
+}
+
+QStringList Sniffing::parseIpv6HopByHop(const u_char *pkt) const {
+    auto hop = reinterpret_cast<const sniff_ipv6_hopopts*>(ipv6Payload(pkt));
+    if (!hop) return {};
+
+    QStringList out;
+    out << QString::number(hop->next_header)
+        << protoName(hop->next_header)
+        << QString::number(hop->hdr_ext_len);
+
+    return out;
+}
+
+QStringList Sniffing::parseIpv6Routing(const u_char *pkt) const {
+    auto routing = reinterpret_cast<const sniff_ipv6_routing*>(ipv6Payload(pkt));
+    if (!routing) return {};
+
+    QStringList out;
+    out << QString::number(routing->next_header)
+        << protoName(routing->next_header)
+        << QString::number(routing->routing_type)
+        << QString::number(routing->segments_left);
+
+    return out;
+}
+
+QStringList Sniffing::parseIpv6Fragment(const u_char *pkt) const {
+    auto frag = reinterpret_cast<const sniff_ipv6_fragment*>(ipv6Payload(pkt));
+    if (!frag) return {};
+
+    uint16_t offsetField = ntohs(frag->frag_offset);
+    uint16_t offset = (offsetField >> 3) & 0x1FFF;
+    bool moreFragments = offsetField & 0x1;
+
+    QStringList out;
+    out << QString::number(frag->next_header)
+        << protoName(frag->next_header)
+        << QString::number(offset)
+        << (moreFragments ? "Yes" : "No")
+        << QStringLiteral("0x%1").arg(ntohl(frag->identification), 8, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
+QStringList Sniffing::parseIpv6Destination(const u_char *pkt) const {
+    auto dest = reinterpret_cast<const sniff_ipv6_dstopts*>(ipv6Payload(pkt));
+    if (!dest) return {};
+
+    QStringList out;
+    out << QString::number(dest->next_header)
+        << protoName(dest->next_header)
+        << QString::number(dest->hdr_ext_len);
+
+    return out;
+}
+
+QStringList Sniffing::parseIpv6Mobility(const u_char *pkt) const {
+    auto mobility = reinterpret_cast<const sniff_ipv6_mobility*>(ipv6Payload(pkt));
+    if (!mobility) return {};
+
+    QStringList out;
+    out << QString::number(mobility->next_header)
+        << protoName(mobility->next_header)
+        << QString::number(mobility->mh_type)
+        << QStringLiteral("0x%1").arg(ntohs(mobility->checksum), 4, 16, QLatin1Char('0')).toUpper();
+
+    return out;
+}
+
 
 QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
     QVector<PacketLayer> layers;
     ProtoField field;
 
-    // --- Ethernet II ---
-    const auto eth = ethHdr(pkt);
-    PacketLayer ethLayer;
-    ethLayer.name = "Ethernet II";
+    const int linkType = Sniffing::linkType();
 
-    field.category = "Frame Header";
-    field.label    = "Src";
-    field.value    = macToStr(eth->ether_shost);
-    ethLayer.fields.append(field);
+    if (linkType == DLT_LINUX_SLL) {
+        const auto cooked = cookedHdr(pkt);
+        PacketLayer cookedLayer;
+        cookedLayer.name = QStringLiteral("Linux Cooked Capture");
 
-    field.label    = "Dst";
-    field.value    = macToStr(eth->ether_dhost);
-    ethLayer.fields.append(field);
+        field.category = QStringLiteral("Pseudo Header");
+        field.label    = QStringLiteral("Packet Type");
+        field.value    = packetTypeToString(ntohs(cooked->packet_type));
+        cookedLayer.fields.append(field);
 
-    field.label    = "Type";
-    field.value    = QString("0x%1")
-                     .arg(ntohs(eth->ether_type), 4, 16, QChar('0'));
-    ethLayer.fields.append(field);
+        field.label    = QStringLiteral("ARPHRD Type");
+        field.value    = QString::number(ntohs(cooked->arphrd_type));
+        cookedLayer.fields.append(field);
 
-    layers.append(ethLayer);
+        field.label    = QStringLiteral("Address");
+        field.value    = cookedAddressToString(cooked);
+        cookedLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Address Length");
+        field.value    = QString::number(ntohs(cooked->addr_len));
+        cookedLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Protocol");
+        field.value    = QStringLiteral("0x%1")
+                          .arg(ntohs(cooked->protocol), 4, 16, QLatin1Char('0'));
+        cookedLayer.fields.append(field);
+
+        layers.append(cookedLayer);
+    }
+    else {
+        const auto eth = ethHdr(pkt);
+        PacketLayer ethLayer;
+        ethLayer.name = QStringLiteral("Ethernet II");
+
+        field.category = QStringLiteral("Frame Header");
+        field.label    = QStringLiteral("Src");
+        field.value    = macToStr(eth->ether_shost);
+        ethLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Dst");
+        field.value    = macToStr(eth->ether_dhost);
+        ethLayer.fields.append(field);
+
+        field.label    = QStringLiteral("Type");
+        field.value    = QStringLiteral("0x%1")
+                           .arg(ntohs(eth->ether_type), 4, 16, QLatin1Char('0'));
+        ethLayer.fields.append(field);
+
+        layers.append(ethLayer);
+    }
 
     uint16_t et = ethType(pkt);
 
@@ -473,6 +936,198 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
             }
             layers.append(icmpLayer);
         }
+        // --- IGMP ---
+        else if (ip->ip_p == IPPROTO_IGMP) {
+            auto vals = parseIgmp(pkt);
+            static const QStringList labels = {
+                "Type","Description","Max Response Time","Checksum","Group Address"
+            };
+            PacketLayer igmpLayer;
+            igmpLayer.name = "Internet Group Management Protocol";
+            field.category = "IGMP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                igmpLayer.fields.append(field);
+            }
+            layers.append(igmpLayer);
+        }
+        // --- SCTP ---
+        else if (ip->ip_p == IPPROTO_SCTP) {
+            auto vals = parseSctp(pkt);
+            static const QStringList labels = {
+                "Source port","Destination port","Verification Tag","Checksum"
+            };
+            PacketLayer sctpLayer;
+            sctpLayer.name = "Stream Control Transmission Protocol";
+            field.category = "SCTP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                sctpLayer.fields.append(field);
+            }
+            layers.append(sctpLayer);
+        }
+        // --- UDP-Lite ---
+        else if (ip->ip_p == IPPROTO_UDPLITE) {
+            auto vals = parseUdplite(pkt);
+            static const QStringList labels = {
+                "Source port","Destination port","Checksum coverage","Checksum"
+            };
+            PacketLayer udpliteLayer;
+            udpliteLayer.name = "UDP-Lite";
+            field.category = "UDP-Lite Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                udpliteLayer.fields.append(field);
+            }
+            layers.append(udpliteLayer);
+        }
+        // --- GRE ---
+        else if (ip->ip_p == IPPROTO_GRE) {
+            auto vals = parseGre(pkt);
+            static const QStringList labels = {
+                "Flags","Version","Protocol"
+            };
+            PacketLayer greLayer;
+            greLayer.name = "Generic Routing Encapsulation";
+            field.category = "GRE Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                greLayer.fields.append(field);
+            }
+            layers.append(greLayer);
+        }
+        // --- IP-in-IP ---
+        else if (ip->ip_p == IPPROTO_IPIP) {
+            auto vals = parseIpip(pkt);
+            static const QStringList labels = {
+                "Inner Src","Inner Dst","Inner Protocol","Inner Length"
+            };
+            PacketLayer ipipLayer;
+            ipipLayer.name = "IP in IP";
+            field.category = "Inner IPv4";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                ipipLayer.fields.append(field);
+            }
+            layers.append(ipipLayer);
+        }
+        // --- OSPF ---
+        else if (ip->ip_p == IPPROTO_OSPFIGP) {
+            auto vals = parseOspf(pkt);
+            static const QStringList labels = {
+                "Version","Type","Length","Router ID","Area ID","Checksum","Auth Type"
+            };
+            PacketLayer ospfLayer;
+            ospfLayer.name = "Open Shortest Path First";
+            field.category = "OSPF Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                ospfLayer.fields.append(field);
+            }
+            layers.append(ospfLayer);
+        }
+        // --- RSVP ---
+        else if (ip->ip_p == IPPROTO_RSVP) {
+            auto vals = parseRsvp(pkt);
+            static const QStringList labels = {
+                "Version","Message Type","Checksum","Send TTL","Length"
+            };
+            PacketLayer rsvpLayer;
+            rsvpLayer.name = "Resource Reservation Protocol";
+            field.category = "RSVP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                rsvpLayer.fields.append(field);
+            }
+            layers.append(rsvpLayer);
+        }
+        // --- PIM ---
+        else if (ip->ip_p == IPPROTO_PIM) {
+            auto vals = parsePim(pkt);
+            static const QStringList labels = {
+                "Version","Message Type","Checksum"
+            };
+            PacketLayer pimLayer;
+            pimLayer.name = "Protocol Independent Multicast";
+            field.category = "PIM Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                pimLayer.fields.append(field);
+            }
+            layers.append(pimLayer);
+        }
+        // --- EGP ---
+        else if (ip->ip_p == IPPROTO_EGP) {
+            auto vals = parseEgp(pkt);
+            static const QStringList labels = {
+                "Version","Type","Code","Status","Checksum","AS Number","Sequence"
+            };
+            PacketLayer egpLayer;
+            egpLayer.name = "Exterior Gateway Protocol";
+            field.category = "EGP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                egpLayer.fields.append(field);
+            }
+            layers.append(egpLayer);
+        }
+        // --- IPsec AH ---
+        else if (ip->ip_p == IPPROTO_AH) {
+            auto vals = parseAh(pkt);
+            static const QStringList labels = {
+                "Next Header","Payload Length","SPI","Sequence Number"
+            };
+            PacketLayer ahLayer;
+            ahLayer.name = "Authentication Header";
+            field.category = "AH Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                ahLayer.fields.append(field);
+            }
+            layers.append(ahLayer);
+        }
+        // --- IPsec ESP ---
+        else if (ip->ip_p == IPPROTO_ESP) {
+            auto vals = parseEsp(pkt);
+            static const QStringList labels = {
+                "SPI","Sequence Number"
+            };
+            PacketLayer espLayer;
+            espLayer.name = "Encapsulating Security Payload";
+            field.category = "ESP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                espLayer.fields.append(field);
+            }
+            layers.append(espLayer);
+        }
+        // --- MPLS-in-IP ---
+        else if (ip->ip_p == IPPROTO_MPLS) {
+            auto vals = parseMpls(pkt);
+            static const QStringList labels = {
+                "Label","Traffic Class","Bottom of Stack","TTL"
+            };
+            PacketLayer mplsLayer;
+            mplsLayer.name = "Multiprotocol Label Switching";
+            field.category = "MPLS Entry";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                mplsLayer.fields.append(field);
+            }
+            layers.append(mplsLayer);
+        }
     }
     // --- IPv6 ---
     else if (et == ETHERTYPE_IPV6) {
@@ -537,6 +1192,230 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
             }
             layers.append(udp6Layer);
         }
+        // --- ICMPv6 ---
+        else if (ip6->ip6_nxt == IPPROTO_ICMPV6) {
+            auto vals = parseIcmpv6(pkt);
+            static const QStringList labels = {
+                "ICMPv6 Type","Code","Checksum","Identifier","Sequence","Message"
+            };
+            PacketLayer icmp6Layer;
+            icmp6Layer.name = "Internet Control Message Protocol v6";
+            field.category = "ICMPv6 Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                icmp6Layer.fields.append(field);
+            }
+            layers.append(icmp6Layer);
+        }
+        // --- SCTP ---
+        else if (ip6->ip6_nxt == IPPROTO_SCTP) {
+            auto vals = parseSctp(pkt);
+            static const QStringList labels = {
+                "Source port","Destination port","Verification Tag","Checksum"
+            };
+            PacketLayer sctp6Layer;
+            sctp6Layer.name = "Stream Control Transmission Protocol";
+            field.category = "SCTP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                sctp6Layer.fields.append(field);
+            }
+            layers.append(sctp6Layer);
+        }
+        // --- UDP-Lite ---
+        else if (ip6->ip6_nxt == IPPROTO_UDPLITE) {
+            auto vals = parseUdplite(pkt);
+            static const QStringList labels = {
+                "Source port","Destination port","Checksum coverage","Checksum"
+            };
+            PacketLayer udplite6Layer;
+            udplite6Layer.name = "UDP-Lite";
+            field.category = "UDP-Lite Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                udplite6Layer.fields.append(field);
+            }
+            layers.append(udplite6Layer);
+        }
+        // --- GRE ---
+        else if (ip6->ip6_nxt == IPPROTO_GRE) {
+            auto vals = parseGre(pkt);
+            static const QStringList labels = {
+                "Flags","Version","Protocol"
+            };
+            PacketLayer gre6Layer;
+            gre6Layer.name = "Generic Routing Encapsulation";
+            field.category = "GRE Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                gre6Layer.fields.append(field);
+            }
+            layers.append(gre6Layer);
+        }
+        // --- RSVP ---
+        else if (ip6->ip6_nxt == IPPROTO_RSVP) {
+            auto vals = parseRsvp(pkt);
+            static const QStringList labels = {
+                "Version","Message Type","Checksum","Send TTL","Length"
+            };
+            PacketLayer rsvp6Layer;
+            rsvp6Layer.name = "Resource Reservation Protocol";
+            field.category = "RSVP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                rsvp6Layer.fields.append(field);
+            }
+            layers.append(rsvp6Layer);
+        }
+        // --- PIM ---
+        else if (ip6->ip6_nxt == IPPROTO_PIM) {
+            auto vals = parsePim(pkt);
+            static const QStringList labels = {
+                "Version","Message Type","Checksum"
+            };
+            PacketLayer pim6Layer;
+            pim6Layer.name = "Protocol Independent Multicast";
+            field.category = "PIM Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                pim6Layer.fields.append(field);
+            }
+            layers.append(pim6Layer);
+        }
+        // --- IPsec AH ---
+        else if (ip6->ip6_nxt == IPPROTO_AH) {
+            auto vals = parseAh(pkt);
+            static const QStringList labels = {
+                "Next Header","Payload Length","SPI","Sequence Number"
+            };
+            PacketLayer ah6Layer;
+            ah6Layer.name = "Authentication Header";
+            field.category = "AH Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                ah6Layer.fields.append(field);
+            }
+            layers.append(ah6Layer);
+        }
+        // --- IPsec ESP ---
+        else if (ip6->ip6_nxt == IPPROTO_ESP) {
+            auto vals = parseEsp(pkt);
+            static const QStringList labels = {
+                "SPI","Sequence Number"
+            };
+            PacketLayer esp6Layer;
+            esp6Layer.name = "Encapsulating Security Payload";
+            field.category = "ESP Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                esp6Layer.fields.append(field);
+            }
+            layers.append(esp6Layer);
+        }
+        // --- MPLS-in-IP ---
+        else if (ip6->ip6_nxt == IPPROTO_MPLS) {
+            auto vals = parseMpls(pkt);
+            static const QStringList labels = {
+                "Label","Traffic Class","Bottom of Stack","TTL"
+            };
+            PacketLayer mpls6Layer;
+            mpls6Layer.name = "Multiprotocol Label Switching";
+            field.category = "MPLS Entry";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                mpls6Layer.fields.append(field);
+            }
+            layers.append(mpls6Layer);
+        }
+        // --- IPv6 Hop-by-Hop Options ---
+        else if (ip6->ip6_nxt == IPPROTO_HOPOPTS) {
+            auto vals = parseIpv6HopByHop(pkt);
+            static const QStringList labels = {
+                "Next Header","Next Header Name","Header Length"
+            };
+            PacketLayer hopLayer;
+            hopLayer.name = "IPv6 Hop-by-Hop Options";
+            field.category = "Extension Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                hopLayer.fields.append(field);
+            }
+            layers.append(hopLayer);
+        }
+        // --- IPv6 Routing Header ---
+        else if (ip6->ip6_nxt == IPPROTO_ROUTING) {
+            auto vals = parseIpv6Routing(pkt);
+            static const QStringList labels = {
+                "Next Header","Next Header Name","Routing Type","Segments Left"
+            };
+            PacketLayer routingLayer;
+            routingLayer.name = "IPv6 Routing Header";
+            field.category = "Extension Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                routingLayer.fields.append(field);
+            }
+            layers.append(routingLayer);
+        }
+        // --- IPv6 Fragment Header ---
+        else if (ip6->ip6_nxt == IPPROTO_FRAGMENT) {
+            auto vals = parseIpv6Fragment(pkt);
+            static const QStringList labels = {
+                "Next Header","Next Header Name","Offset","More Fragments","Identification"
+            };
+            PacketLayer fragLayer;
+            fragLayer.name = "IPv6 Fragment Header";
+            field.category = "Extension Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                fragLayer.fields.append(field);
+            }
+            layers.append(fragLayer);
+        }
+        // --- IPv6 Destination Options ---
+        else if (ip6->ip6_nxt == IPPROTO_DSTOPTS) {
+            auto vals = parseIpv6Destination(pkt);
+            static const QStringList labels = {
+                "Next Header","Next Header Name","Header Length"
+            };
+            PacketLayer destLayer;
+            destLayer.name = "IPv6 Destination Options";
+            field.category = "Extension Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                destLayer.fields.append(field);
+            }
+            layers.append(destLayer);
+        }
+        // --- IPv6 Mobility Header ---
+        else if (ip6->ip6_nxt == IPPROTO_MH) {
+            auto vals = parseIpv6Mobility(pkt);
+            static const QStringList labels = {
+                "Next Header","Next Header Name","Mobility Type","Checksum"
+            };
+            PacketLayer mobilityLayer;
+            mobilityLayer.name = "IPv6 Mobility Header";
+            field.category = "Extension Header";
+            for (int i = 0; i < qMin(labels.size(), vals.size()); ++i) {
+                field.label = labels[i];
+                field.value = vals[i];
+                mobilityLayer.fields.append(field);
+            }
+            layers.append(mobilityLayer);
+        }
     }
     // --- ARP ---
     else if (et == ETHERTYPE_ARP) {
@@ -563,7 +1442,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
 
 
 void Sniffing::saveToPcap(const QString &filePath) {
-    pcap_t *pcap = pcap_open_dead(DLT_EN10MB, 65535);
+    pcap_t *pcap = pcap_open_dead(Sniffing::linkType(), 65535);
     pcap_dumper_t *dumper = pcap_dump_open(pcap, filePath.toUtf8().constData());
 
     timeval ts;
@@ -589,6 +1468,8 @@ void Sniffing::openFromPcap(const QString &filePath) {
         qWarning("Failed to open pcap file: %s", errbuf);
         return;
     }
+
+    Sniffing::setLinkLayer(pcap_datalink(handle));
 
     const u_char *raw;
     struct pcap_pkthdr *header;

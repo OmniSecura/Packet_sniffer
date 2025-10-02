@@ -8,6 +8,10 @@
 #include <stdint.h>
 #include <netinet/in.h>
 
+#ifndef IPPROTO_OSPFIGP
+#define IPPROTO_OSPFIGP 89
+#endif
+
 // -------------------------------------------------------------------------
 // LINK LAYER
 // -------------------------------------------------------------------------
@@ -73,6 +77,19 @@ struct sniff_pppoe_session {   // RFC: 2516 (PPPoE Session stage)
     uint16_t session_id;  // Session identifier
     uint16_t length;      // Length of PPP payload
 };
+
+#pragma pack(push, 1)
+struct sniff_linux_cooked {   // Linux "any" pseudo header (DLT_LINUX_SLL)
+    uint16_t packet_type;  // From PACKET_ constants
+    uint16_t arphrd_type;  // ARPHRD_ value describing link-layer type
+    uint16_t addr_len;     // Length of the link-layer address
+    uint8_t  addr[8];      // Link-layer address (padded with zeros)
+    uint16_t protocol;     // Upper-layer protocol (EtherType)
+};
+#pragma pack(pop)
+
+static constexpr int LINUX_SLL_HEADER_LEN = sizeof(sniff_linux_cooked);
+static_assert(LINUX_SLL_HEADER_LEN == 16, "Linux cooked header should be 16 bytes");
 
 struct sniff_cdp {         // Cisco Discovery Protocol
     uint8_t  version;

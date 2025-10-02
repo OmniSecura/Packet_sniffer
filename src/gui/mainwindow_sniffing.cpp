@@ -131,7 +131,6 @@ void MainWindow::handlePacket(const QByteArray &raw,
     tableRow.background = bg;
 
     packetModel->addPacket(tableRow);
-    if (bg.isValid());
     //   for (int c = 0; c < packetTable->columnCount(); ++c)
     //     packetTable->item(row,c)->setBackground(bg);  //QTableWidget before QTableView
 
