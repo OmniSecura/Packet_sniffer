@@ -965,8 +965,7 @@ ParsedHttp Sniffing::parseHttp(const u_char *pkt, int linkType) const {
         return result;
 
     QByteArray headerSection = payload.left(headerEnd);
-    QList<QByteArray> lines = headerSection.split('
-');
+    QList<QByteArray> lines = headerSection.split('\n');
     if (lines.isEmpty())
         return result;
 
@@ -1302,7 +1301,7 @@ ParsedTls Sniffing::parseTls(const u_char *pkt, int linkType) const {
         return result;
 
     const uint8_t *handshake = data + 5;
-    int remaining = qMin(recordLen, length - 5);
+    int remaining = qMin<int>(int(recordLen), length - 5);
     if (remaining < 4)
         return result;
 
