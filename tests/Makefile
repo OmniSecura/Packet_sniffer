@@ -53,10 +53,15 @@ OBJECTS_DIR   = ./
 ####### Files
 
 SOURCES       = ../packets/sniffing.cpp \
-		tst_sniffing.cpp moc_tst_sniffing.cpp
+                ../src/appsettings.cpp \
+                tst_sniffing.cpp moc_tst_sniffing.cpp \
+                tst_appsettings.cpp moc_tst_appsettings.cpp
 OBJECTS       = sniffing.o \
-		tst_sniffing.o \
-		moc_tst_sniffing.o
+                appsettings.o \
+                tst_sniffing.o \
+                moc_tst_sniffing.o \
+                tst_appsettings.o \
+                moc_tst_appsettings.o
 DIST          = /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt6/mkspecs/common/unix.conf \
 		/usr/lib/x86_64-linux-gnu/qt6/mkspecs/common/linux.conf \
@@ -523,39 +528,54 @@ compiler_moc_header_make_all: moc_tst_sniffing.cpp
 compiler_moc_header_clean:
 	-$(DEL_FILE) moc_tst_sniffing.cpp
 moc_tst_sniffing.cpp: tst_sniffing.h \
-		moc_predefs.h \
-		/usr/lib/qt6/libexec/moc
+                moc_predefs.h \
+                /usr/lib/qt6/libexec/moc
 	/usr/lib/qt6/libexec/moc $(DEFINES) --include /home/bartosz/Engineering/PacketSniffer/tests/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -I/home/bartosz/Engineering/PacketSniffer/tests -I/home/bartosz/Engineering/PacketSniffer -I/home/bartosz/Engineering/PacketSniffer/protocols -I/home/bartosz/Engineering/PacketSniffer/packets -I/home/bartosz/Engineering/PacketSniffer/src -I/home/bartosz/Engineering/PacketSniffer/devices -I/home/bartosz/Engineering/PacketSniffer/filter -I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtTest -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/c++/14 -I/usr/include/x86_64-linux-gnu/c++/14 -I/usr/include/c++/14/backward -I/usr/lib/gcc/x86_64-linux-gnu/14/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include tst_sniffing.h -o moc_tst_sniffing.cpp
+
+moc_tst_appsettings.cpp: tst_appsettings.cpp \
+                moc_predefs.h \
+                /usr/lib/qt6/libexec/moc
+	/usr/lib/qt6/libexec/moc $(DEFINES) --include /home/bartosz/Engineering/PacketSniffer/tests/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -I/home/bartosz/Engineering/PacketSniffer/tests -I/home/bartosz/Engineering/PacketSniffer -I/home/bartosz/Engineering/PacketSniffer/protocols -I/home/bartosz/Engineering/PacketSniffer/packets -I/home/bartosz/Engineering/PacketSniffer/src -I/home/bartosz/Engineering/PacketSniffer/devices -I/home/bartosz/Engineering/PacketSniffer/filter -I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtTest -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/c++/14 -I/usr/include/x86_64-linux-gnu/c++/14 -I/usr/include/c++/14/backward -I/usr/lib/gcc/x86_64-linux-gnu/14/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include tst_appsettings.cpp -o moc_tst_appsettings.cpp
 
 compiler_moc_objc_header_make_all:
 compiler_moc_objc_header_clean:
-compiler_moc_source_make_all:
+compiler_moc_source_make_all: moc_tst_appsettings.cpp
 compiler_moc_source_clean:
+	-$(DEL_FILE) moc_tst_appsettings.cpp
 compiler_yacc_decl_make_all:
 compiler_yacc_decl_clean:
 compiler_yacc_impl_make_all:
 compiler_yacc_impl_clean:
 compiler_lex_make_all:
 compiler_lex_clean:
-compiler_clean: compiler_moc_predefs_clean compiler_moc_header_clean 
+compiler_clean: compiler_moc_predefs_clean compiler_moc_header_clean compiler_moc_source_clean
 
 ####### Compile
 
 sniffing.o: ../packets/sniffing.cpp ../packets/sniffing.h \
-		../src/packetworker.h \
-		../protocols/proto_struct.h \
-		../packets/packethelpers.h
+                ../src/packetworker.h \
+                ../protocols/proto_struct.h \
+                ../packets/packethelpers.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o sniffing.o ../packets/sniffing.cpp
 
+appsettings.o: ../src/appsettings.cpp ../src/appsettings.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o appsettings.o ../src/appsettings.cpp
+
 tst_sniffing.o: tst_sniffing.cpp ../packets/sniffing.h \
-		../src/packetworker.h \
-		../protocols/proto_struct.h \
-		../packets/packethelpers.h \
-		tst_sniffing.h
+                ../src/packetworker.h \
+                ../protocols/proto_struct.h \
+                ../packets/packethelpers.h \
+                tst_sniffing.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o tst_sniffing.o tst_sniffing.cpp
 
-moc_tst_sniffing.o: moc_tst_sniffing.cpp 
+moc_tst_sniffing.o: moc_tst_sniffing.cpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_tst_sniffing.o moc_tst_sniffing.cpp
+
+tst_appsettings.o: tst_appsettings.cpp ../src/appsettings.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o tst_appsettings.o tst_appsettings.cpp
+
+moc_tst_appsettings.o: moc_tst_appsettings.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_tst_appsettings.o moc_tst_appsettings.cpp
 
 ####### Install
 
