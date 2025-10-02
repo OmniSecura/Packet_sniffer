@@ -53,66 +53,71 @@ OBJECTS_DIR   = ./
 ####### Files
 
 SOURCES       = devices/devices.cpp \
-		filter/filter.cpp \
-		packets/sniffing.cpp \
-		packets/packet_geolocation/geolocation.cpp \
-		packets/packet_geolocation/GeoMap.cpp \
-		src/main.cpp \
-		src/mainwindow.cpp \
-		src/packetworker.cpp \
-		src/coloring/packetcolorizer.cpp \
-		src/coloring/customizerdialog.cpp \
-		src/theme/theme.cpp \
-		src/theme/otherthemesdialog.cpp \
-		src/gui/mainwindow_ui.cpp \
-		src/gui/mainwindow_sniffing.cpp \
-		src/gui/mainwindow_packets.cpp \
-		src/statistics/statsdialog.cpp \
-		src/statistics/charts/barchart.cpp \
-		src/statistics/charts/linechart.cpp \
-		src/statistics/charts/pieChart.cpp \
-		src/statistics/statistics.cpp \
-		packets/packet_geolocation/CountryMapping/CountryMap.cpp \
-		src/PacketTableModel.cpp moc_mainwindow.cpp \
-		moc_packetworker.cpp \
-		moc_customizerdialog.cpp \
-		moc_otherthemesdialog.cpp \
-		moc_statsdialog.cpp \
-		moc_barchart.cpp \
-		moc_linechart.cpp \
-		moc_GeoMap.cpp \
-		moc_PacketTableModel.cpp
+                filter/filter.cpp \
+                packets/sniffing.cpp \
+                packets/packet_geolocation/geolocation.cpp \
+                packets/packet_geolocation/GeoMap.cpp \
+                src/main.cpp \
+                src/mainwindow.cpp \
+                src/packetworker.cpp \
+                src/coloring/packetcolorizer.cpp \
+                src/coloring/customizerdialog.cpp \
+                src/theme/theme.cpp \
+                src/theme/otherthemesdialog.cpp \
+                src/gui/mainwindow_ui.cpp \
+                src/gui/mainwindow_sniffing.cpp \
+                src/gui/mainwindow_packets.cpp \
+                src/statistics/geooverviewdialog.cpp \
+                src/statistics/statsdialog.cpp \
+                src/statistics/charts/barchart.cpp \
+                src/statistics/charts/linechart.cpp \
+                src/statistics/charts/pieChart.cpp \
+                src/statistics/statistics.cpp \
+                packets/packet_geolocation/CountryMapping/CountryMap.cpp \
+                src/PacketTableModel.cpp \
+                moc_mainwindow.cpp \
+                moc_packetworker.cpp \
+                moc_customizerdialog.cpp \
+                moc_otherthemesdialog.cpp \
+                moc_geooverviewdialog.cpp \
+                moc_statsdialog.cpp \
+                moc_barchart.cpp \
+                moc_linechart.cpp \
+                moc_GeoMap.cpp \
+                moc_PacketTableModel.cpp
 OBJECTS       = devices.o \
-		filter.o \
-		sniffing.o \
-		geolocation.o \
-		GeoMap.o \
-		main.o \
-		mainwindow.o \
-		packetworker.o \
-		packetcolorizer.o \
-		customizerdialog.o \
-		theme.o \
-		otherthemesdialog.o \
-		mainwindow_ui.o \
-		mainwindow_sniffing.o \
-		mainwindow_packets.o \
-		statsdialog.o \
-		barchart.o \
-		linechart.o \
-		pieChart.o \
-		statistics.o \
-		CountryMap.o \
-		PacketTableModel.o \
-		moc_mainwindow.o \
-		moc_packetworker.o \
-		moc_customizerdialog.o \
-		moc_otherthemesdialog.o \
-		moc_statsdialog.o \
-		moc_barchart.o \
-		moc_linechart.o \
-		moc_GeoMap.o \
-		moc_PacketTableModel.o
+                filter.o \
+                sniffing.o \
+                geolocation.o \
+                GeoMap.o \
+                main.o \
+                mainwindow.o \
+                packetworker.o \
+                packetcolorizer.o \
+                customizerdialog.o \
+                theme.o \
+                otherthemesdialog.o \
+                mainwindow_ui.o \
+                mainwindow_sniffing.o \
+                mainwindow_packets.o \
+                geooverviewdialog.o \
+                statsdialog.o \
+                barchart.o \
+                linechart.o \
+                pieChart.o \
+                statistics.o \
+                CountryMap.o \
+                PacketTableModel.o \
+                moc_mainwindow.o \
+                moc_packetworker.o \
+                moc_customizerdialog.o \
+                moc_otherthemesdialog.o \
+                moc_geooverviewdialog.o \
+                moc_statsdialog.o \
+                moc_barchart.o \
+                moc_linechart.o \
+                moc_GeoMap.o \
+                moc_PacketTableModel.o
 DIST          = /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt6/mkspecs/common/unix.conf \
 		/usr/lib/x86_64-linux-gnu/qt6/mkspecs/common/linux.conf \
@@ -259,9 +264,10 @@ DIST          = /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/spec_pre.prf \
 		src/theme/otherthemesdialog.h \
 		src/gui/mainwindow_ui.h \
 		src/gui/mainwindow_sniffing.h \
-		src/gui/mainwindow_packets.h \
-		src/theme/ui_otherthemesdialog.h \
-		src/statistics/statsdialog.h \
+                src/gui/mainwindow_packets.h \
+                src/theme/ui_otherthemesdialog.h \
+                src/statistics/geooverviewdialog.h \
+                src/statistics/statsdialog.h \
 		src/statistics/charts/barchart.h \
 		src/statistics/charts/linechart.h \
 		src/statistics/charts/pieChart.h \
@@ -283,8 +289,9 @@ DIST          = /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/spec_pre.prf \
 		src/theme/otherthemesdialog.cpp \
 		src/gui/mainwindow_ui.cpp \
 		src/gui/mainwindow_sniffing.cpp \
-		src/gui/mainwindow_packets.cpp \
-		src/statistics/statsdialog.cpp \
+                src/gui/mainwindow_packets.cpp \
+                src/statistics/geooverviewdialog.cpp \
+                src/statistics/statsdialog.cpp \
 		src/statistics/charts/barchart.cpp \
 		src/statistics/charts/linechart.cpp \
 		src/statistics/charts/pieChart.cpp \
@@ -596,8 +603,8 @@ distdir: FORCE
 	@test -d $(DISTDIR) || mkdir -p $(DISTDIR)
 	$(COPY_FILE) --parents $(DIST) $(DISTDIR)/
 	$(COPY_FILE) --parents /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/data/dummy.cpp $(DISTDIR)/
-	$(COPY_FILE) --parents devices/devices.h filter/filter.h packets/sniffing.h packets/packet_geolocation/geolocation.h protocols/proto_struct.h src/mainwindow.h src/packetworker.h src/coloring/packetcolorizer.h src/coloring/customizerdialog.h src/coloring/coloringrule.h packets/packethelpers.h src/theme/theme.h src/theme/otherthemesdialog.h src/gui/mainwindow_ui.h src/gui/mainwindow_sniffing.h src/gui/mainwindow_packets.h src/theme/ui_otherthemesdialog.h src/statistics/statsdialog.h src/statistics/charts/barchart.h src/statistics/charts/linechart.h src/statistics/charts/pieChart.h src/statistics/statistics.h src/statistics/charts/ChartConfig.h packets/packet_geolocation/GeoMap.h packets/packet_geolocation/CountryMapping/CountryMap.h src/PacketTableModel.h $(DISTDIR)/
-	$(COPY_FILE) --parents devices/devices.cpp filter/filter.cpp packets/sniffing.cpp packets/packet_geolocation/geolocation.cpp packets/packet_geolocation/GeoMap.cpp src/main.cpp src/mainwindow.cpp src/packetworker.cpp src/coloring/packetcolorizer.cpp src/coloring/customizerdialog.cpp src/theme/theme.cpp src/theme/otherthemesdialog.cpp src/gui/mainwindow_ui.cpp src/gui/mainwindow_sniffing.cpp src/gui/mainwindow_packets.cpp src/statistics/statsdialog.cpp src/statistics/charts/barchart.cpp src/statistics/charts/linechart.cpp src/statistics/charts/pieChart.cpp src/statistics/statistics.cpp packets/packet_geolocation/CountryMapping/CountryMap.cpp src/PacketTableModel.cpp $(DISTDIR)/
+	$(COPY_FILE) --parents devices/devices.h filter/filter.h packets/sniffing.h packets/packet_geolocation/geolocation.h protocols/proto_struct.h src/mainwindow.h src/packetworker.h src/coloring/packetcolorizer.h src/coloring/customizerdialog.h src/coloring/coloringrule.h packets/packethelpers.h src/theme/theme.h src/theme/otherthemesdialog.h src/gui/mainwindow_ui.h src/gui/mainwindow_sniffing.h src/gui/mainwindow_packets.h src/theme/ui_otherthemesdialog.h src/statistics/geooverviewdialog.h src/statistics/statsdialog.h src/statistics/charts/barchart.h src/statistics/charts/linechart.h src/statistics/charts/pieChart.h src/statistics/statistics.h src/statistics/charts/ChartConfig.h packets/packet_geolocation/GeoMap.h packets/packet_geolocation/CountryMapping/CountryMap.h src/PacketTableModel.h $(DISTDIR)/
+	$(COPY_FILE) --parents devices/devices.cpp filter/filter.cpp packets/sniffing.cpp packets/packet_geolocation/geolocation.cpp packets/packet_geolocation/GeoMap.cpp src/main.cpp src/mainwindow.cpp src/packetworker.cpp src/coloring/packetcolorizer.cpp src/coloring/customizerdialog.cpp src/theme/theme.cpp src/theme/otherthemesdialog.cpp src/gui/mainwindow_ui.cpp src/gui/mainwindow_sniffing.cpp src/gui/mainwindow_packets.cpp src/statistics/geooverviewdialog.cpp src/statistics/statsdialog.cpp src/statistics/charts/barchart.cpp src/statistics/charts/linechart.cpp src/statistics/charts/pieChart.cpp src/statistics/statistics.cpp packets/packet_geolocation/CountryMapping/CountryMap.cpp src/PacketTableModel.cpp $(DISTDIR)/
 
 
 clean: compiler_clean 
@@ -629,9 +636,9 @@ compiler_moc_predefs_clean:
 moc_predefs.h: /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/data/dummy.cpp
 	g++ -pipe -O2 -std=gnu++1z -Wall -Wextra -dM -E -o moc_predefs.h /usr/lib/x86_64-linux-gnu/qt6/mkspecs/features/data/dummy.cpp
 
-compiler_moc_header_make_all: moc_mainwindow.cpp moc_packetworker.cpp moc_customizerdialog.cpp moc_otherthemesdialog.cpp moc_statsdialog.cpp moc_barchart.cpp moc_linechart.cpp moc_GeoMap.cpp moc_PacketTableModel.cpp
+compiler_moc_header_make_all: moc_mainwindow.cpp moc_packetworker.cpp moc_customizerdialog.cpp moc_otherthemesdialog.cpp moc_geooverviewdialog.cpp moc_statsdialog.cpp moc_barchart.cpp moc_linechart.cpp moc_GeoMap.cpp moc_PacketTableModel.cpp
 compiler_moc_header_clean:
-	-$(DEL_FILE) moc_mainwindow.cpp moc_packetworker.cpp moc_customizerdialog.cpp moc_otherthemesdialog.cpp moc_statsdialog.cpp moc_barchart.cpp moc_linechart.cpp moc_GeoMap.cpp moc_PacketTableModel.cpp
+	-$(DEL_FILE) moc_mainwindow.cpp moc_packetworker.cpp moc_customizerdialog.cpp moc_otherthemesdialog.cpp moc_geooverviewdialog.cpp moc_statsdialog.cpp moc_barchart.cpp moc_linechart.cpp moc_GeoMap.cpp moc_PacketTableModel.cpp
 moc_mainwindow.cpp: src/mainwindow.h \
 		src/packetworker.h \
 		packets/sniffing.h \
@@ -671,13 +678,22 @@ moc_customizerdialog.cpp: src/coloring/customizerdialog.h \
 	/usr/lib/qt6/libexec/moc $(DEFINES) --include /home/bartosz/Engineering/PacketSniffer/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -I/home/bartosz/Engineering/PacketSniffer -I/home/bartosz/Engineering/PacketSniffer/protocols -I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtSvgWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtSvg -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtXml -I/usr/include/x86_64-linux-gnu/qt6/QtConcurrent -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/c++/14 -I/usr/include/x86_64-linux-gnu/c++/14 -I/usr/include/c++/14/backward -I/usr/lib/gcc/x86_64-linux-gnu/14/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include src/coloring/customizerdialog.h -o moc_customizerdialog.cpp
 
 moc_otherthemesdialog.cpp: src/theme/otherthemesdialog.h \
-		moc_predefs.h \
-		/usr/lib/qt6/libexec/moc
+                moc_predefs.h \
+                /usr/lib/qt6/libexec/moc
 	/usr/lib/qt6/libexec/moc $(DEFINES) --include /home/bartosz/Engineering/PacketSniffer/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -I/home/bartosz/Engineering/PacketSniffer -I/home/bartosz/Engineering/PacketSniffer/protocols -I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtSvgWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtSvg -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtXml -I/usr/include/x86_64-linux-gnu/qt6/QtConcurrent -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/c++/14 -I/usr/include/x86_64-linux-gnu/c++/14 -I/usr/include/c++/14/backward -I/usr/lib/gcc/x86_64-linux-gnu/14/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include src/theme/otherthemesdialog.h -o moc_otherthemesdialog.cpp
 
+moc_geooverviewdialog.cpp: src/statistics/geooverviewdialog.h \
+                src/PacketTableModel.h \
+                packets/packet_geolocation/GeoMap.h \
+                packets/packet_geolocation/geolocation.h \
+                packets/packet_geolocation/CountryMapping/CountryMap.h \
+                moc_predefs.h \
+                /usr/lib/qt6/libexec/moc
+	/usr/lib/qt6/libexec/moc $(DEFINES) --include /home/bartosz/Engineering/PacketSniffer/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++ -I/home/bartosz/Engineering/PacketSniffer -I/home/bartosz/Engineering/PacketSniffer/protocols -I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtSvgWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtSvg -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtXml -I/usr/include/x86_64-linux-gnu/qt6/QtConcurrent -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/c++/14 -I/usr/include/x86_64-linux-gnu/c++/14 -I/usr/include/c++/14/backward -I/usr/lib/gcc/x86_64-linux-gnu/14/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include src/statistics/geooverviewdialog.h -o moc_geooverviewdialog.cpp
+
 moc_statsdialog.cpp: src/statistics/statsdialog.h \
-		src/statistics/charts/barchart.h \
-		src/statistics/charts/ChartConfig.h \
+                src/statistics/charts/barchart.h \
+                src/statistics/charts/ChartConfig.h \
 		src/statistics/charts/linechart.h \
 		moc_predefs.h \
 		/usr/lib/qt6/libexec/moc
@@ -854,32 +870,40 @@ mainwindow_sniffing.o: src/gui/mainwindow_sniffing.cpp src/gui/mainwindow_sniffi
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow_sniffing.o src/gui/mainwindow_sniffing.cpp
 
 mainwindow_packets.o: src/gui/mainwindow_packets.cpp src/gui/mainwindow_packets.h \
-		src/mainwindow.h \
-		src/packetworker.h \
-		packets/sniffing.h \
-		protocols/proto_struct.h \
-		src/coloring/packetcolorizer.h \
-		src/coloring/coloringrule.h \
-		src/theme/theme.h \
-		src/theme/otherthemesdialog.h \
-		src/coloring/customizerdialog.h \
-		packets/packethelpers.h \
-		src/statistics/statsdialog.h \
-		src/statistics/charts/barchart.h \
-		src/statistics/charts/ChartConfig.h \
-		src/statistics/charts/linechart.h \
-		src/statistics/statistics.h \
-		src/statistics/charts/pieChart.h \
-		packets/packet_geolocation/geolocation.h \
-		packets/packet_geolocation/GeoMap.h \
-		packets/packet_geolocation/CountryMapping/CountryMap.h \
-		src/PacketTableModel.h
+                src/mainwindow.h \
+                src/packetworker.h \
+                packets/sniffing.h \
+                protocols/proto_struct.h \
+                src/coloring/packetcolorizer.h \
+                src/coloring/coloringrule.h \
+                src/theme/theme.h \
+                src/theme/otherthemesdialog.h \
+                src/coloring/customizerdialog.h \
+                packets/packethelpers.h \
+                src/statistics/geooverviewdialog.h \
+                src/statistics/statsdialog.h \
+                src/statistics/charts/barchart.h \
+                src/statistics/charts/ChartConfig.h \
+                src/statistics/charts/linechart.h \
+                src/statistics/statistics.h \
+                src/statistics/charts/pieChart.h \
+                packets/packet_geolocation/geolocation.h \
+                packets/packet_geolocation/GeoMap.h \
+                packets/packet_geolocation/CountryMapping/CountryMap.h \
+                src/PacketTableModel.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow_packets.o src/gui/mainwindow_packets.cpp
 
+geooverviewdialog.o: src/statistics/geooverviewdialog.cpp src/statistics/geooverviewdialog.h \
+                src/PacketTableModel.h \
+                packets/packet_geolocation/GeoMap.h \
+                packets/packet_geolocation/geolocation.h \
+                packets/packet_geolocation/CountryMapping/CountryMap.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o geooverviewdialog.o src/statistics/geooverviewdialog.cpp
+
 statsdialog.o: src/statistics/statsdialog.cpp src/statistics/statsdialog.h \
-		src/statistics/charts/barchart.h \
-		src/statistics/charts/ChartConfig.h \
-		src/statistics/charts/linechart.h
+                src/statistics/charts/barchart.h \
+                src/statistics/charts/ChartConfig.h \
+                src/statistics/charts/linechart.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o statsdialog.o src/statistics/statsdialog.cpp
 
 barchart.o: src/statistics/charts/barchart.cpp src/statistics/charts/barchart.h \
@@ -917,10 +941,13 @@ moc_packetworker.o: moc_packetworker.cpp
 moc_customizerdialog.o: moc_customizerdialog.cpp 
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_customizerdialog.o moc_customizerdialog.cpp
 
-moc_otherthemesdialog.o: moc_otherthemesdialog.cpp 
+moc_otherthemesdialog.o: moc_otherthemesdialog.cpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_otherthemesdialog.o moc_otherthemesdialog.cpp
 
-moc_statsdialog.o: moc_statsdialog.cpp 
+moc_geooverviewdialog.o: moc_geooverviewdialog.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_geooverviewdialog.o moc_geooverviewdialog.cpp
+
+moc_statsdialog.o: moc_statsdialog.cpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_statsdialog.o moc_statsdialog.cpp
 
 moc_barchart.o: moc_barchart.cpp 
