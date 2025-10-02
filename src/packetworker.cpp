@@ -48,6 +48,8 @@ void PacketWorker::process() {
         m_netmask
     );
 
+    emit linkTypeChanged(m_linkType.load(std::memory_order_relaxed), m_netmask);
+
     // 3) capture loop
     while (m_running.load(std::memory_order_relaxed)) {
         int ret = pcap_dispatch(

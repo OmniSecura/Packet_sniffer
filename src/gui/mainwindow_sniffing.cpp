@@ -1,6 +1,8 @@
 #include "mainwindow_sniffing.h"
 #include "../PacketTableModel.h"
 
+#include <pcap.h>
+
 void MainWindow::startSniffing() {
     startBtn->setEnabled(false);
     stopBtn->setEnabled(true);
@@ -45,6 +47,10 @@ void MainWindow::startSniffing() {
             worker, &PacketWorker::process);
     connect(worker, &PacketWorker::newPacket,
             this, &MainWindow::handlePacket);
+    connect(worker, &PacketWorker::linkTypeChanged,
+            this, [this](int linkType, bpf_u_int32 netmask) {
+                packetColorizer.setLinkType(linkType, netmask);
+            });
     connect(workerThread, &QThread::finished,
             worker, &QObject::deleteLater);
     connect(workerThread, &QThread::finished,
@@ -84,6 +90,9 @@ void MainWindow::handlePacket(const QByteArray &raw,
                               const QStringList &infos,
                               int linkType)
 {
+    if (packetColorizer.linkType() != linkType) {
+        packetColorizer.setLinkType(linkType, 0);
+    }
     // == TIME ==
     QDateTime pktTime = QDateTime::currentDateTime();
     qint64 elapsedMs = sessionStartTime.msecsTo(pktTime);

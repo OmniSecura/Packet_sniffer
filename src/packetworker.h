@@ -38,6 +38,7 @@ signals:
     void newPacket(const QByteArray &rawData,
                    QStringList infos,
                    int linkType);
+    void linkTypeChanged(int linkType, bpf_u_int32 netmask);
 
 private:
     QString           m_iface;

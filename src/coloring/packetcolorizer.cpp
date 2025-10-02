@@ -1,47 +1,96 @@
 #include "packetcolorizer.h"
-#include <pcap.h>
-#include <QSettings>
+
+#include <QDebug>
 #include <QFile>
 #include <QIODevice>
 #include <QJsonArray>
-#include <QJsonObject>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QSettings>
 
-PacketColorizer::PacketColorizer() {
-    m_dummyHandle  = pcap_open_dead(DLT_EN10MB, 65535);
-    m_dummyNetmask = 0;
-}
+PacketColorizer::PacketColorizer()
+    : m_dummyHandle(pcap_open_dead(DLT_EN10MB, 65535))
+    , m_dummyNetmask(0)
+    , m_linkType(DLT_EN10MB)
+{}
 
 PacketColorizer::~PacketColorizer() {
-    pcap_close(m_dummyHandle);
+    clearRules();
+    if (m_dummyHandle) {
+        pcap_close(m_dummyHandle);
+    }
 }
 
 void PacketColorizer::addRule(ColoringRule&& rule) {
-    rule.compile(m_dummyHandle, m_dummyNetmask);
+    if (!m_dummyHandle) {
+        qWarning() << "Cannot add coloring rule without a dummy handle";
+        return;
+    }
+    if (!rule.compile(m_dummyHandle, m_dummyNetmask)) {
+        qWarning() << "Failed to compile coloring rule" << rule.bpfExpression;
+        return;
+    }
     m_rules.append(std::move(rule));
 }
 
 void PacketColorizer::clearRules() {
+    for (auto &rule : m_rules) {
+        pcap_freecode(&rule.prog);
+    }
     m_rules.clear();
 }
 
 QColor PacketColorizer::colorFor(const pcap_pkthdr* hdr,
                                  const u_char* pkt) const
 {
-    for (auto &r : m_rules) {
+    for (const auto &r : m_rules) {
         if (r.matches(hdr, pkt))
             return r.color;
     }
     return QColor();
 }
 
+void PacketColorizer::setLinkType(int linkType, bpf_u_int32 netmask) {
+    if (linkType == m_linkType && netmask == m_dummyNetmask) {
+        return;
+    }
+
+    if (m_dummyHandle) {
+        pcap_close(m_dummyHandle);
+        m_dummyHandle = nullptr;
+    }
+
+    m_dummyHandle = pcap_open_dead(linkType, 65535);
+    if (!m_dummyHandle) {
+        qWarning() << "Failed to create dummy handle for link type" << linkType;
+        return;
+    }
+
+    m_linkType = linkType;
+    m_dummyNetmask = netmask;
+    recompileRules();
+}
+
+void PacketColorizer::recompileRules() {
+    if (!m_dummyHandle) {
+        return;
+    }
+
+    for (auto &rule : m_rules) {
+        pcap_freecode(&rule.prog);
+        if (!rule.compile(m_dummyHandle, m_dummyNetmask)) {
+            qWarning() << "Failed to compile coloring rule" << rule.bpfExpression
+                       << "for link type" << m_linkType;
+        }
+    }
+}
+
 // ----------------------------------------------------------------
 // Settings (.config)
 // ----------------------------------------------------------------
 
-
 void PacketColorizer::saveRulesToSettings() {
-    if (m_rules.isEmpty()) return;  
+    if (m_rules.isEmpty()) return;
     QSettings s("Engineering", "PacketSniffer");
     s.beginGroup("ColoringRules");
     s.remove("");
