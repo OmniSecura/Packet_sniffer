@@ -1,0 +1,86 @@
+{
+    "perSecond": [
+        {
+            "avgPacketSize": 66,
+            "bps": 132,
+            "connections": [
+                {
+                    "dst": "185.199.110.154",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "185.199.110.154"
+                }
+            ],
+            "pps": 2,
+            "protocolCounts": {
+                "TCP": 2
+            },
+            "second": 1
+        },
+        {
+            "avgPacketSize": 66,
+            "bps": 132,
+            "connections": [
+                {
+                    "dst": "35.190.80.1",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "35.190.80.1"
+                }
+            ],
+            "pps": 2,
+            "protocolCounts": {
+                "TCP": 2
+            },
+            "second": 3
+        },
+        {
+            "avgPacketSize": 66,
+            "bps": 264,
+            "connections": [
+                {
+                    "dst": "192.168.1.102",
+                    "src": "20.189.173.3"
+                },
+                {
+                    "dst": "192.168.1.102",
+                    "src": "185.199.111.133"
+                },
+                {
+                    "dst": "185.199.111.133",
+                    "src": "192.168.1.102"
+                },
+                {
+                    "dst": "20.189.173.3",
+                    "src": "192.168.1.102"
+                }
+            ],
+            "pps": 4,
+            "protocolCounts": {
+                "TCP": 4
+            },
+            "second": 5
+        },
+        {
+            "avgPacketSize": 86,
+            "bps": 86,
+            "connections": [
+                {
+                    "dst": "ff02::1",
+                    "src": "fe80::3268:93ff:fe68:331"
+                }
+            ],
+            "pps": 1,
+            "protocolCounts": {
+                "ICMPv6": 1
+            },
+            "second": 6
+        }
+    ],
+    "sessionEnd": "2025-10-02T14:51:23",
+    "sessionStart": "2025-10-02T14:51:17"
+}
