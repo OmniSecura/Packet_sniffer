@@ -9,6 +9,7 @@
 #include <QFileInfo>
 #include <QLineEdit>
 #include <QTimer>
+#include <pcap.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -146,12 +147,16 @@ bool MainWindow::loadOfflineSession(const SessionStorage::LoadedSession &session
         ? session.record.startTime
         : QDateTime::currentDateTime();
 
-    for (const QByteArray &raw : session.packets) {
-        Sniffing::appendPacket(raw);
+    for (int i = 0; i < session.packets.size(); ++i) {
+        const QByteArray &raw = session.packets.at(i);
+        const int datalink = (i < session.datalinks.size())
+            ? session.datalinks.at(i)
+            : DLT_EN10MB;
+        Sniffing::appendPacket(raw, datalink);
         QStringList infos;
         infos << QString::number(packetTimestamp.toSecsSinceEpoch())
               << QString::number(raw.size());
-        handlePacket(raw, infos);
+        handlePacket(raw, infos, datalink);
         packetTimestamp = packetTimestamp.addMSecs(1);
     }
 

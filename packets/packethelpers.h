@@ -5,92 +5,144 @@
 #include <QMap>
 #include <QVector>
 #include <QString>
+#include <QStringList>
 #include <arpa/inet.h>
 
-static constexpr int LINKHDR_LEN = SIZE_ETHERNET;
+#pragma pack(push, 1)
+struct sniff_linux_sll {
+    uint16_t packet_type;
+    uint16_t arphrd_type;
+    uint16_t link_addr_len;
+    uint8_t  link_addr[8];
+    uint16_t protocol;
+};
 
-// Ethernet
-inline const sniff_ethernet* ethHdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ethernet*>(pkt);
+struct sniff_linux_sll2 {
+    uint16_t protocol;
+    uint16_t reserved;
+    uint32_t if_index;
+    uint16_t arphrd_type;
+    uint8_t  packet_type;
+    uint8_t  link_addr_len;
+    uint8_t  link_addr[8];
+    uint16_t reserved2;
+};
+#pragma pack(pop)
+
+static_assert(sizeof(sniff_linux_sll)  == 16, "Unexpected SLL header size");
+static_assert(sizeof(sniff_linux_sll2) == 20, "Unexpected SLL2 header size");
+
+inline int linkHeaderLength(int datalinkType) {
+    switch (datalinkType) {
+        case DLT_EN10MB:
+            return SIZE_ETHERNET;
+        case DLT_LINUX_SLL:
+            return static_cast<int>(sizeof(sniff_linux_sll));
+        case DLT_LINUX_SLL2:
+            return static_cast<int>(sizeof(sniff_linux_sll2));
+        default:
+            return SIZE_ETHERNET;
+    }
 }
-inline uint16_t ethType(const u_char* pkt) {
-    return ntohs( ethHdr(pkt)->ether_type );
+
+inline uint16_t linkProtocol(const u_char* pkt, int datalinkType) {
+    switch (datalinkType) {
+        case DLT_EN10MB:
+            return ntohs(reinterpret_cast<const sniff_ethernet*>(pkt)->ether_type);
+        case DLT_LINUX_SLL:
+            return ntohs(reinterpret_cast<const sniff_linux_sll*>(pkt)->protocol);
+        case DLT_LINUX_SLL2:
+            return ntohs(reinterpret_cast<const sniff_linux_sll2*>(pkt)->protocol);
+        default:
+            return ntohs(reinterpret_cast<const sniff_ethernet*>(pkt)->ether_type);
+    }
+}
+
+inline const sniff_ethernet* ethHdr(const u_char* pkt, int datalinkType) {
+    if (datalinkType == DLT_EN10MB)
+        return reinterpret_cast<const sniff_ethernet*>(pkt);
+    return nullptr;
+}
+
+inline const sniff_linux_sll* sllHdr(const u_char* pkt) {
+    return reinterpret_cast<const sniff_linux_sll*>(pkt);
+}
+
+inline const sniff_linux_sll2* sll2Hdr(const u_char* pkt) {
+    return reinterpret_cast<const sniff_linux_sll2*>(pkt);
 }
 
 // ARP
-inline const sniff_arp* arpHdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_arp*>(pkt + LINKHDR_LEN);
+inline const sniff_arp* arpHdr(const u_char* pkt, int datalinkType) {
+    return reinterpret_cast<const sniff_arp*>(pkt + linkHeaderLength(datalinkType));
 }
 
 // IPv4
-inline const sniff_ip* ipv4Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ip*>(pkt + LINKHDR_LEN);
+inline const sniff_ip* ipv4Hdr(const u_char* pkt, int datalinkType) {
+    return reinterpret_cast<const sniff_ip*>(pkt + linkHeaderLength(datalinkType));
 }
-inline int ipv4HdrLen(const u_char* pkt) {
-    const auto ip = ipv4Hdr(pkt);
+inline int ipv4HdrLen(const u_char* pkt, int datalinkType) {
+    const auto ip = ipv4Hdr(pkt, datalinkType);
     return IP_HL(ip) * 4;
 }
-inline const u_char* ipv4Payload(const u_char* pkt) {
-    return pkt + LINKHDR_LEN + ipv4HdrLen(pkt);
+inline const u_char* ipv4Payload(const u_char* pkt, int datalinkType) {
+    return pkt + linkHeaderLength(datalinkType) + ipv4HdrLen(pkt, datalinkType);
 }
 
-// TCP 
-inline const sniff_tcp* tcpHdr(const u_char* pkt) {
+// TCP
+inline const sniff_tcp* tcpHdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHeaderLength(datalinkType) + ipv4HdrLen(pkt, datalinkType)
     );
 }
 
-// UDP 
-inline const sniff_udp* udpHdr(const u_char* pkt) {
+// UDP
+inline const sniff_udp* udpHdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHeaderLength(datalinkType) + ipv4HdrLen(pkt, datalinkType)
     );
 }
 
 // ICMP
-inline const sniff_icmp* icmpHdr(const u_char* pkt) {
+inline const sniff_icmp* icmpHdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_icmp*>(
-        pkt + LINKHDR_LEN + ipv4HdrLen(pkt)
+        pkt + linkHeaderLength(datalinkType) + ipv4HdrLen(pkt, datalinkType)
     );
 }
-
 
 // IPv6
-inline const sniff_ipv6* ipv6Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ipv6*>(pkt + LINKHDR_LEN);
+inline const sniff_ipv6* ipv6Hdr(const u_char* pkt, int datalinkType) {
+    return reinterpret_cast<const sniff_ipv6*>(pkt + linkHeaderLength(datalinkType));
 }
-inline const u_char* ipv6Payload(const u_char* pkt) {
-    return pkt + LINKHDR_LEN + sizeof(sniff_ipv6);
+inline const u_char* ipv6Payload(const u_char* pkt, int datalinkType) {
+    return pkt + linkHeaderLength(datalinkType) + sizeof(sniff_ipv6);
 }
 
-inline const sniff_tcp* tcp6Hdr(const u_char* pkt) {
+inline const sniff_tcp* tcp6Hdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHeaderLength(datalinkType) + sizeof(sniff_ipv6)
     );
 }
 
-inline const sniff_udp* udp6Hdr(const u_char* pkt) {
+inline const sniff_udp* udp6Hdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHeaderLength(datalinkType) + sizeof(sniff_ipv6)
     );
 }
 
-inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt) {
+inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt, int datalinkType) {
     return reinterpret_cast<const sniff_icmpv6*>(
-        pkt + LINKHDR_LEN + sizeof(sniff_ipv6)
+        pkt + linkHeaderLength(datalinkType) + sizeof(sniff_ipv6)
     );
 }
-// MAC → QString
-inline QString macToStr(const u_char *a) {
-    return QString("%1:%2:%3:%4:%5:%6")
-        .arg(a[0],2,16,QLatin1Char('0'))
-        .arg(a[1],2,16,QLatin1Char('0'))
-        .arg(a[2],2,16,QLatin1Char('0'))
-        .arg(a[3],2,16,QLatin1Char('0'))
-        .arg(a[4],2,16,QLatin1Char('0'))
-        .arg(a[5],2,16,QLatin1Char('0'))
-        .toUpper();
+
+inline QString macToStr(const u_char *a, int len = ETHER_ADDR_LEN) {
+    QStringList parts;
+    parts.reserve(len);
+    for (int i = 0; i < len; ++i) {
+        parts << QStringLiteral("%1").arg(a[i], 2, 16, QLatin1Char('0'));
+    }
+    return parts.join(QLatin1Char(':')).toUpper();
 }
 
 // IP proto name

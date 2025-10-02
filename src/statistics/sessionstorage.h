@@ -28,6 +28,7 @@ struct LoadedSession {
     SessionRecord record;
     QJsonDocument statsDocument;
     QVector<QByteArray> packets;
+    QVector<int> datalinks;
 };
 
 QString sessionsDirectory();

@@ -6,10 +6,12 @@
 #include <QByteArray>
 #include <QStringList>
 #include <QVector>
+#include <pcap.h>
 
 struct PacketTableRow {
     QStringList columns; // column texts: No., Time, Source, Destination, Protocol, Length, Info
     QByteArray rawData;  // packet raw bytes
+    int datalinkType = DLT_EN10MB;
     QColor background;   // background color
 };
 

@@ -41,6 +41,39 @@ static QByteArray tcpIpv4Packet()
     return pkt;
 }
 
+static QByteArray tcpIpv4PacketSll()
+{
+    sniff_linux_sll sll{};
+    sll.packet_type = htons(0);
+    sll.arphrd_type = htons(1);
+    sll.link_addr_len = htons(6);
+    memcpy(sll.link_addr, "\x66\x77\x88\x99\xAA\xBB", 6);
+    sll.protocol = htons(ETHERTYPE_IP);
+
+    sniff_ip ip{};
+    ip.ip_vhl = (4 << 4) | 5;
+    ip.ip_len = htons(sizeof(sniff_ip) + sizeof(sniff_tcp));
+    ip.ip_ttl = 64;
+    ip.ip_p = IPPROTO_TCP;
+    ip.ip_src.s_addr = inet_addr("192.0.2.1");
+    ip.ip_dst.s_addr = inet_addr("192.0.2.2");
+
+    sniff_tcp tcp{};
+    tcp.th_sport = htons(1234);
+    tcp.th_dport = htons(80);
+    tcp.th_seq = htonl(1);
+    tcp.th_ack = htonl(0);
+    tcp.th_offx2 = (5 << 4);
+    tcp.th_flags = TH_SYN;
+    tcp.th_win = htons(65535);
+
+    QByteArray pkt;
+    pkt.append(reinterpret_cast<const char*>(&sll), sizeof(sll));
+    pkt.append(reinterpret_cast<const char*>(&ip), sizeof(ip));
+    pkt.append(reinterpret_cast<const char*>(&tcp), sizeof(tcp));
+    return pkt;
+}
+
 static QByteArray udpIpv4Packet()
 {
     sniff_ethernet eth{};
@@ -187,6 +220,15 @@ void SniffingTest::parseTcpIpv6()
     auto vals = s.parseTcp(reinterpret_cast<const u_char*>(pkt.constData()));
     QCOMPARE(vals.at(0), QString("2001:db8::1"));
     QCOMPARE(vals.at(1), QString("2001:db8::2"));
+}
+
+void SniffingTest::parseTcpLinuxSll()
+{
+    Sniffing s;
+    auto pkt = tcpIpv4PacketSll();
+    auto vals = s.parseTcp(reinterpret_cast<const u_char*>(pkt.constData()), DLT_LINUX_SLL);
+    QCOMPARE(vals.at(0), QString("192.0.2.1"));
+    QCOMPARE(vals.at(1), QString("192.0.2.2"));
 }
 
 void SniffingTest::parseArp()
