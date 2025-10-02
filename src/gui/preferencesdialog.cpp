@@ -61,7 +61,9 @@ PreferencesDialog::PreferencesDialog(AppSettings &settings,
 }
 
 void PreferencesDialog::accept() {
-    settings.setDefaultInterface(interfaceCombo->currentText());
+    const QString selectedInterface = interfaceCombo->currentText();
+    settings.setDefaultInterface(selectedInterface);
+    settings.setLastUsedInterface(selectedInterface);
     settings.setAutoStartCapture(autoStartCheck->isChecked());
     settings.setTheme(themeCombo->currentText());
     settings.setReportsDirectory(reportsDirEdit->text());

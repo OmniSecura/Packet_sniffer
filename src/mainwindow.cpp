@@ -29,7 +29,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ifaceBox, &QComboBox::currentTextChanged,
             this, [this](const QString &text) {
-                appSettings.setDefaultInterface(text);
+                appSettings.setLastUsedInterface(text);
             });
     connect(promiscBox, &QCheckBox::toggled,
             this, [this](bool checked) {
@@ -57,6 +57,15 @@ void MainWindow::loadPreferences() {
     const QString preferredInterface = appSettings.defaultInterface();
     if (!preferredInterface.isEmpty()) {
         const int index = ifaceBox->findText(preferredInterface);
+        if (index != -1) {
+            ifaceBox->setCurrentIndex(index);
+            return;
+        }
+    }
+
+    const QString lastUsed = appSettings.lastUsedInterface();
+    if (!lastUsed.isEmpty()) {
+        const int index = ifaceBox->findText(lastUsed);
         if (index != -1) {
             ifaceBox->setCurrentIndex(index);
         }
