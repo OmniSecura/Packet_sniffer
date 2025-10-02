@@ -7,6 +7,12 @@
 // implementation. The unit tests only need Sniffing's parsing helpers, so we
 // provide a stub to satisfy the linker when Sniffing::packet_callback is
 // compiled into the test binary.
+class PacketWorker
+{
+public:
+    void newPacket(const QByteArray &, QStringList);
+};
+
 void PacketWorker::newPacket(const QByteArray &, QStringList) {}
 
 
