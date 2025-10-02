@@ -157,12 +157,13 @@ void MainWindow::setupUI() {
     auto *statsMenu = menuBar->addMenu("Statistics");
     statsMenu->addAction("Summary", this, [this]() {
         StatsDialog dlg(this);
-        dlg.exec(); 
+        dlg.exec();
     });
     statsMenu->addAction("GeoOverview", this, [this]() {
         GeoOverviewDialog dlg(&geo, this);
         dlg.exec();
     });
+    statsMenu->addAction("Session Manager...", this, &MainWindow::openSessionManager);
 
 
     auto *toolsMenu = menuBar->addMenu("Tools");
