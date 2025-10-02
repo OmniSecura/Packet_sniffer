@@ -29,7 +29,8 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
     
     const u_char *pkt = reinterpret_cast<const u_char*>(raw.constData());
     
-    const auto layers = parser.parseLayers(pkt);
+    int datalinkType = r.datalinkType;
+    const auto layers = parser.parseLayers(pkt, datalinkType);
     for (const auto &lay : layers) {
         addLayerToTree(detailsTree, lay);
     }
@@ -68,11 +69,11 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
         mapWidget->highlightCountries(isoCodes);
 
     // --- Payload hex dump ---
-    const auto et = ethType(pkt);
+    const auto et = linkProtocol(pkt, datalinkType);
     const int iphdr = (et == ETHERTYPE_IP
-                       ? IP_HL(ipv4Hdr(pkt)) * 4
-                       : 0);
-    const int header_len = SIZE_ETHERNET + iphdr;
+                       ? ipv4HdrLen(pkt, datalinkType)
+                       : (et == ETHERTYPE_IPV6 ? static_cast<int>(sizeof(sniff_ipv6)) : 0));
+    const int header_len = linkHeaderLength(datalinkType) + iphdr;
     const QByteArray payload = raw.mid(header_len);
     hexEdit->setPlainText(
         parser.toHexAscii(
@@ -96,7 +97,7 @@ void MainWindow::showColorizeCustomizer() {
 }
 
 
-QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt)
+QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, int datalinkType)
 {
     QStringList infoValues;
 
@@ -104,22 +105,22 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt)
     if (proto == QLatin1String("TCP")) {
         // parseTcp() returns { src, dst, sport, dport,
         //                       seq, ack, hdrlen, flags, win, sum, urp }
-        auto infos = parser.parseTcp(pkt);
+        auto infos = parser.parseTcp(pkt, datalinkType);
         infoValues = infos.mid(4);
     }
     else if (proto == QLatin1String("UDP")) {
         // parseUdp() returns { src, dst, sport, dport, len, sum }
-        auto infos = parser.parseUdp(pkt);
+        auto infos = parser.parseUdp(pkt, datalinkType);
         infoValues = infos.mid(4);
     }
     else if (proto == QLatin1String("ARP")) {
         // parseArp() returns { sip, tip, hrd, pro, hln, pln, op, sha, tha, smac, dmac }
-        auto infos = parser.parseArp(pkt);
+        auto infos = parser.parseArp(pkt, datalinkType);
         infoValues = infos.mid(2);
     }
     else if (proto == QLatin1String("ICMP")){
         // parseIcmp() returns  {type, code , checksum, identifier, sequence, message}
-        auto infos = parser.parseIcmp(pkt);
+        auto infos = parser.parseIcmp(pkt, datalinkType);
         infoValues = infos.mid(0);
     }
     else {

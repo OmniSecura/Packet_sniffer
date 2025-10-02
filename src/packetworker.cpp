@@ -2,6 +2,7 @@
 #include "devices/devices.h"
 #include "filter/filter.h"
 #include "protocols/proto_struct.h"
+#include "packets/sniffing.h"
 
 PacketWorker::PacketWorker(const QString &iface,
                            const QString &filter,
@@ -29,9 +30,13 @@ void PacketWorker::process() {
         m_promisc
     ));
     if (!m_handle) {
-        emit newPacket({}, {QStringLiteral("ERROR: %1").arg(dev.error_buffer)});
+        emit newPacket({}, {QStringLiteral("ERROR: %1").arg(dev.error_buffer)}, m_datalinkType);
         return;
     }
+
+    m_datalinkType = pcap_datalink(m_handle.get());
+    if (m_datalinkType < 0)
+        m_datalinkType = DLT_EN10MB;
 
     // 2) compile & set filter via Filters
     Filters flt;
@@ -49,7 +54,7 @@ void PacketWorker::process() {
         int ret = pcap_dispatch(
             m_handle.get(),
             -1,
-            Sniffing::packet_callback,   
+            Sniffing::packet_callback,
             reinterpret_cast<u_char*>(this)
         );
         if (ret == PCAP_ERROR_BREAK)

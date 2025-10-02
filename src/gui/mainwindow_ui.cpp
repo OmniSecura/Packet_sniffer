@@ -9,6 +9,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QCoreApplication>
+#include <pcap.h>
 
 void MainWindow::setupUI() {
     // === Central UI ===
@@ -121,10 +122,16 @@ void MainWindow::setupUI() {
         if (!fileName.isEmpty()) {
             parser.openFromPcap(fileName);
 
-            for (const QByteArray &raw : parser.getAllPackets()) {
+            const auto &packets = parser.getAllPackets();
+            const auto &datalinks = parser.getAllDatalinks();
+            for (int i = 0; i < packets.size(); ++i) {
+                const QByteArray &raw = packets.at(i);
+                const int datalink = (i < datalinks.size())
+                    ? datalinks.at(i)
+                    : DLT_EN10MB;
                 QStringList infos;
-                infos << QString::number(0) << QString::number(raw.size()); 
-                handlePacket(raw, infos);
+                infos << QString::number(0) << QString::number(raw.size());
+                handlePacket(raw, infos, datalink);
             }
         }
     });

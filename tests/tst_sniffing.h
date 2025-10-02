@@ -11,6 +11,7 @@ private slots:
     void parseUdpIpv4();
     void parseIcmpIpv4();
     void parseTcpIpv6();
+    void parseTcpLinuxSll();
     void parseArp();
 };
 

@@ -2,7 +2,6 @@
 #define PACKETWORKER_H
 
 #include <QObject>
-#include "packets/sniffing.h"
 #include <QString>
 #include <QThread>
 #include <netinet/in.h>
@@ -35,7 +34,10 @@ signals:
     // rawData: packet bytes
     // infos:   [0]=timestamp, [1]=caplen, [2]=srcPort, [3]=dstPort
     void newPacket(const QByteArray &rawData,
-                   QStringList infos);
+                   QStringList infos,
+                   int datalinkType);
+
+    int datalinkType() const { return m_datalinkType; }
 
 private:
     QString           m_iface;
@@ -44,6 +46,7 @@ private:
     std::atomic<bool> m_running;
     std::unique_ptr<pcap_t, decltype(&pcap_close)> m_handle{nullptr, &pcap_close};
     bpf_u_int32       m_netmask = 0;
+    int               m_datalinkType = DLT_EN10MB;
 };
 
 #endif // PACKETWORKER_H

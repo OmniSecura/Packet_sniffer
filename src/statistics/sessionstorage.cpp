@@ -119,6 +119,7 @@ std::optional<LoadedSession> loadSession(const SessionRecord &record)
     Sniffing sniffer;
     sniffer.openFromPcap(record.pcapPath);
     session.packets = Sniffing::getAllPackets();
+    session.datalinks = Sniffing::getAllDatalinks();
     sniffer.clearBuffer();
 
     return session;
