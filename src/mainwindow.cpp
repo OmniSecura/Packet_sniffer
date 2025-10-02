@@ -3,8 +3,10 @@
 #include "coloring/packetcolorizer.h"
 #include "theme/theme.h"
 #include "gui/mainwindow_ui.h"
+#include "statistics/sessionmanagerdialog.h"
 
 #include <QComboBox>
+#include <QFileInfo>
 #include <QLineEdit>
 #include <QTimer>
 
@@ -46,12 +48,6 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {
     packetColorizer.saveRulesToSettings();
     stopSniffing();
-
-    if (stats) {
-        const QString statsDir = "src/statistics/sessions";
-        stats->SaveStatsToJson(statsDir);
-        stats.reset();
-    }
 }
 
 void MainWindow::loadPreferences() {
@@ -71,4 +67,93 @@ void MainWindow::loadPreferences() {
     if (appSettings.autoStartCapture() && startBtn->isEnabled() && ifaceBox->count() > 0) {
         QTimer::singleShot(0, startBtn, &QPushButton::click);
     }
+}
+
+void MainWindow::openSessionManager()
+{
+    SessionManagerDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const auto record = dlg.selectedSession();
+    if (!record) {
+        return;
+    }
+
+    auto loaded = SessionStorage::loadSession(*record);
+    if (!loaded) {
+        QMessageBox::warning(this,
+                             tr("Session Manager"),
+                             tr("Failed to load the selected session."));
+        return;
+    }
+
+    if (!loadOfflineSession(*loaded)) {
+        QMessageBox::warning(this,
+                             tr("Session Manager"),
+                             tr("Unable to display the selected session."));
+    }
+}
+
+void MainWindow::persistCurrentSession()
+{
+    if (!stats) {
+        return;
+    }
+
+    const QString statsDir = Statistics::defaultSessionsDir();
+    stats->SaveStatsToJson(statsDir);
+
+    const QString statsFile = stats->lastFilePath();
+    if (!statsFile.isEmpty()) {
+        QFileInfo info(statsFile);
+        const QString pcapPath = info.absolutePath()
+                               + QLatin1Char('/')
+                               + info.completeBaseName()
+                               + QStringLiteral(".pcap");
+        parser.saveToPcap(pcapPath);
+    }
+}
+
+bool MainWindow::loadOfflineSession(const SessionStorage::LoadedSession &session)
+{
+    if (stopBtn && stopBtn->isEnabled()) {
+        stopSniffing();
+    }
+
+    if (sessionTimer) {
+        sessionTimer->stop();
+    }
+
+    startNewSession();
+    stats.reset();
+    protocolCounts.clear();
+
+    qint64 duration = 0;
+    if (session.record.startTime.isValid() && session.record.endTime.isValid()) {
+        duration = session.record.startTime.secsTo(session.record.endTime);
+        if (duration < 0) {
+            duration = 0;
+        }
+    }
+    sessionStartTime = QDateTime::currentDateTime().addSecs(-duration);
+    updateSessionTime();
+
+    parser.clearBuffer();
+
+    QDateTime packetTimestamp = session.record.startTime.isValid()
+        ? session.record.startTime
+        : QDateTime::currentDateTime();
+
+    for (const QByteArray &raw : session.packets) {
+        Sniffing::appendPacket(raw);
+        QStringList infos;
+        infos << QString::number(packetTimestamp.toSecsSinceEpoch())
+              << QString::number(raw.size());
+        handlePacket(raw, infos);
+        packetTimestamp = packetTimestamp.addMSecs(1);
+    }
+
+    return true;
 }

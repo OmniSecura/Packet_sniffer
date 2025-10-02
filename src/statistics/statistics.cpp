@@ -1,5 +1,13 @@
 #include "statistics.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+
 Statistics::Statistics(const QDateTime &sessionStart)
     : m_sessionStart(sessionStart),
       m_sessionEnd(sessionStart)
@@ -89,4 +97,14 @@ void Statistics::SaveStatsToJson(const QString &dirPath)
         file.write(newDoc.toJson());
         file.close();
     }
+}
+
+QString Statistics::lastFilePath() const
+{
+    return m_lastFilePath;
+}
+
+QString Statistics::defaultSessionsDir()
+{
+    return QCoreApplication::applicationDirPath() + "/src/statistics/sessions";
 }

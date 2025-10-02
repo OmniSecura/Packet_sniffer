@@ -14,6 +14,9 @@ public:
                       quint64 packetSize);
 
     void SaveStatsToJson(const QString &dirPath);
+    QString lastFilePath() const;
+
+    static QString defaultSessionsDir();
 
 private:
     QDateTime m_sessionStart;
