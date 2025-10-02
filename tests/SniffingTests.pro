@@ -4,7 +4,9 @@ TEMPLATE = app
 TARGET = SniffingTests
 
 SOURCES += ../packets/sniffing.cpp \
-           tst_sniffing.cpp
+           ../src/appsettings.cpp \
+           tst_sniffing.cpp \
+           tst_appsettings.cpp
            
 
 HEADERS += tst_sniffing.h

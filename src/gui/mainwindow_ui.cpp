@@ -3,6 +3,9 @@
 #include "../coloring/customizerdialog.h"
 #include "../PacketTableModel.h"
 #include "../statistics/geooverviewdialog.h"
+#include "preferencesdialog.h"
+#include <QSignalBlocker>
+#include <QTimer>
 #include <QMenu>
 #include <QMenuBar>
 #include <QCoreApplication>
@@ -163,8 +166,7 @@ void MainWindow::setupUI() {
 
 
     auto *toolsMenu = menuBar->addMenu("Tools");
-    toolsMenu->addAction("Preferences", this, [](){
-      QMessageBox::information(nullptr,"Tools","…"); });
+    toolsMenu->addAction("Preferences", this, &MainWindow::openPreferences);
 
     toolsMenu->addSeparator();
 
@@ -229,14 +231,53 @@ void MainWindow::setupUI() {
 void MainWindow::listInterfaces() {
     pcap_if_t *alldevs;
     char errbuf[PCAP_ERRBUF_SIZE];
-    ifaceBox->clear();
-    if (pcap_findalldevs(&alldevs, errbuf) == -1) {
-        QMessageBox::critical(this, "Error", errbuf);
-        return;
+    {
+        QSignalBlocker blocker(ifaceBox);
+        ifaceBox->clear();
+        if (pcap_findalldevs(&alldevs, errbuf) == -1) {
+            QMessageBox::critical(this, "Error", errbuf);
+            return;
+        }
+        for (auto *d = alldevs; d; d = d->next)
+            ifaceBox->addItem(d->name);
+        pcap_freealldevs(alldevs);
     }
-    for (auto *d = alldevs; d; d = d->next)
-        ifaceBox->addItem(d->name);
-    pcap_freealldevs(alldevs);
+    const QString preferredInterface = appSettings.defaultInterface();
+    if (!preferredInterface.isEmpty()) {
+        const int index = ifaceBox->findText(preferredInterface);
+        if (index != -1) {
+            ifaceBox->setCurrentIndex(index);
+            return;
+        }
+    }
+    if (ifaceBox->count() > 0) {
+        ifaceBox->setCurrentIndex(0);
+    }
+}
+
+void MainWindow::openPreferences() {
+    QStringList interfaces;
+    interfaces.reserve(ifaceBox->count());
+    for (int i = 0; i < ifaceBox->count(); ++i) {
+        interfaces << ifaceBox->itemText(i);
+    }
+
+    PreferencesDialog dlg(appSettings, interfaces, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        const QString preferredInterface = appSettings.defaultInterface();
+        if (!preferredInterface.isEmpty()) {
+            const int index = ifaceBox->findText(preferredInterface);
+            if (index != -1) {
+                ifaceBox->setCurrentIndex(index);
+            }
+        }
+        Theme::applyTheme(appSettings.theme());
+        themeToggleAction->setText(Theme::toggleActionText());
+
+        if (appSettings.autoStartCapture() && startBtn->isEnabled() && ifaceBox->count() > 0) {
+            QTimer::singleShot(0, startBtn, &QPushButton::click);
+        }
+    }
 }
 
 void MainWindow::showOtherThemesDialog() {
