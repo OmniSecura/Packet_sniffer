@@ -10,10 +10,10 @@
 class PacketWorker
 {
 public:
-    void newPacket(const QByteArray &, QStringList);
+    void newPacket(const QByteArray &, QStringList, int);
 };
 
-void PacketWorker::newPacket(const QByteArray &, QStringList) {}
+void PacketWorker::newPacket(const QByteArray &, QStringList, int) {}
 
 
 static QByteArray tcpIpv4Packet()
@@ -413,4 +413,3 @@ void SniffingTest::parseTlsClientHello()
     QVERIFY(tls.cipherSuites.contains(QStringLiteral("TLS_AES_128_GCM_SHA256")));
 }
 
-QTEST_MAIN(SniffingTest)
