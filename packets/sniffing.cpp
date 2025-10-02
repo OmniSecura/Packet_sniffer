@@ -32,6 +32,189 @@ QString cookedAddressToString(const sniff_linux_cooked *hdr) {
     }
     return parts.join(QLatin1Char(':'));
 }
+
+bool isLikelyHttpPort(quint16 port) {
+    switch (port) {
+        case 80:
+        case 8080:
+        case 8000:
+        case 8008:
+        case 3128:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isLikelyDnsPort(quint16 port) {
+    switch (port) {
+        case 53:
+        case 5353:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isLikelyTlsPort(quint16 port) {
+    switch (port) {
+        case 443:
+        case 853:
+        case 8443:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isLikelyHttpMethod(const QByteArray &method) {
+    static const QSet<QByteArray> httpMethods = {
+        "GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS",
+        "TRACE", "CONNECT", "PATCH"
+    };
+    return httpMethods.contains(method.toUpper());
+}
+
+QString dnsTypeToString(quint16 type) {
+    switch (type) {
+        case 1:   return QStringLiteral("A");
+        case 2:   return QStringLiteral("NS");
+        case 5:   return QStringLiteral("CNAME");
+        case 6:   return QStringLiteral("SOA");
+        case 12:  return QStringLiteral("PTR");
+        case 15:  return QStringLiteral("MX");
+        case 16:  return QStringLiteral("TXT");
+        case 28:  return QStringLiteral("AAAA");
+        case 33:  return QStringLiteral("SRV");
+        case 41:  return QStringLiteral("OPT");
+        default:  return QStringLiteral("TYPE%1").arg(type);
+    }
+}
+
+QString dnsClassToString(quint16 klass) {
+    switch (klass) {
+        case 1:   return QStringLiteral("IN");
+        case 3:   return QStringLiteral("CH");
+        case 4:   return QStringLiteral("HS");
+        default:  return QStringLiteral("CLASS%1").arg(klass);
+    }
+}
+
+QString tlsContentTypeName(quint8 type) {
+    switch (type) {
+        case 20: return QStringLiteral("ChangeCipherSpec");
+        case 21: return QStringLiteral("Alert");
+        case 22: return QStringLiteral("Handshake");
+        case 23: return QStringLiteral("ApplicationData");
+        case 24: return QStringLiteral("Heartbeat");
+        default: return QStringLiteral("0x%1").arg(type, 2, 16, QLatin1Char('0'));
+    }
+}
+
+QString tlsVersionName(quint16 version) {
+    switch (version) {
+        case 0x0300: return QStringLiteral("SSL 3.0");
+        case 0x0301: return QStringLiteral("TLS 1.0");
+        case 0x0302: return QStringLiteral("TLS 1.1");
+        case 0x0303: return QStringLiteral("TLS 1.2");
+        case 0x0304: return QStringLiteral("TLS 1.3");
+        default:     return QStringLiteral("0x%1").arg(version, 4, 16, QLatin1Char('0'));
+    }
+}
+
+QString tlsHandshakeTypeName(quint8 type) {
+    switch (type) {
+        case 0:  return QStringLiteral("HelloRequest");
+        case 1:  return QStringLiteral("ClientHello");
+        case 2:  return QStringLiteral("ServerHello");
+        case 4:  return QStringLiteral("NewSessionTicket");
+        case 11: return QStringLiteral("Certificate");
+        case 12: return QStringLiteral("ServerKeyExchange");
+        case 13: return QStringLiteral("CertificateRequest");
+        case 14: return QStringLiteral("ServerHelloDone");
+        case 16: return QStringLiteral("ClientKeyExchange");
+        case 20: return QStringLiteral("Finished");
+        default: return QStringLiteral("0x%1").arg(type, 2, 16, QLatin1Char('0'));
+    }
+}
+
+QString tlsCipherName(quint16 id) {
+    switch (id) {
+        case 0x0000: return QStringLiteral("TLS_NULL_WITH_NULL_NULL");
+        case 0x0035: return QStringLiteral("TLS_RSA_WITH_AES_256_CBC_SHA");
+        case 0x003C: return QStringLiteral("TLS_RSA_WITH_AES_128_CBC_SHA256");
+        case 0x009C: return QStringLiteral("TLS_RSA_WITH_AES_128_GCM_SHA256");
+        case 0x009D: return QStringLiteral("TLS_RSA_WITH_AES_256_GCM_SHA384");
+        case 0xC02F: return QStringLiteral("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
+        case 0xC030: return QStringLiteral("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384");
+        case 0xC02B: return QStringLiteral("TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256");
+        case 0xC02C: return QStringLiteral("TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384");
+        case 0x1301: return QStringLiteral("TLS_AES_128_GCM_SHA256");
+        case 0x1302: return QStringLiteral("TLS_AES_256_GCM_SHA384");
+        case 0x1303: return QStringLiteral("TLS_CHACHA20_POLY1305_SHA256");
+        default:
+            return QStringLiteral("0x%1").arg(id, 4, 16, QLatin1Char('0')).toUpper();
+    }
+}
+
+QString bytesToHex(const uint8_t *data, int len) {
+    QString out;
+    out.reserve(len * 2);
+    for (int i = 0; i < len; ++i)
+        out += QStringLiteral("%1").arg(data[i], 2, 16, QLatin1Char('0')).toUpper();
+    return out;
+}
+
+QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffset, int depth = 0) {
+    if (!data || offset >= length) {
+        nextOffset = offset;
+        return {};
+    }
+
+    QStringList labels;
+    int pos = offset;
+    bool jumped = false;
+    nextOffset = offset;
+    const int maxDepth = 8;
+
+    while (pos < length) {
+        if (depth > maxDepth)
+            break;
+        quint8 len = data[pos];
+        if (len == 0) {
+            if (!jumped) {
+                ++pos;
+                nextOffset = pos;
+            }
+            else {
+                nextOffset = offset + 2;
+            }
+            break;
+        }
+        if ((len & 0xC0) == 0xC0) {
+            if (pos + 1 >= length)
+                break;
+            int ptr = ((len & 0x3F) << 8) | data[pos + 1];
+            if (!jumped)
+                nextOffset = pos + 2;
+            pos = ptr;
+            jumped = true;
+            ++depth;
+            continue;
+        }
+        ++pos;
+        if (pos + len > length)
+            break;
+        labels << QString::fromLatin1(reinterpret_cast<const char*>(data + pos), len);
+        pos += len;
+        if (!jumped)
+            nextOffset = pos;
+    }
+
+    if (labels.isEmpty())
+        return QStringLiteral(".");
+    return labels.join(QLatin1Char('.'));
+}
 }
 
 Sniffing::Sniffing() {}
@@ -765,6 +948,507 @@ QStringList Sniffing::parseIpv6Mobility(const u_char *pkt, int linkType) const {
     return out;
 }
 
+ParsedHttp Sniffing::parseHttp(const u_char *pkt, int linkType) const {
+    ParsedHttp result;
+    auto segment = tcpSegmentView(pkt, linkType);
+    if (!segment.header || segment.payloadLength <= 0)
+        return result;
+
+    quint16 sport = ntohs(segment.header->th_sport);
+    quint16 dport = ntohs(segment.header->th_dport);
+    QByteArray payload(reinterpret_cast<const char*>(segment.payload), segment.payloadLength);
+
+    int headerEnd = payload.indexOf("\r\n\r\n");
+    if (headerEnd == -1)
+        headerEnd = payload.size();
+    if (headerEnd <= 0)
+        return result;
+
+    QByteArray headerSection = payload.left(headerEnd);
+    QList<QByteArray> lines = headerSection.split('
+');
+    if (lines.isEmpty())
+        return result;
+
+    QByteArray firstLine = lines.takeFirst().trimmed();
+    if (firstLine.isEmpty())
+        return result;
+
+    bool portMatch = isLikelyHttpPort(sport) || isLikelyHttpPort(dport);
+    bool isResponse = firstLine.startsWith("HTTP/");
+    bool isRequest = false;
+
+    if (!isResponse) {
+        int spaceIdx = firstLine.indexOf(' ');
+        if (spaceIdx > 0)
+            isRequest = isLikelyHttpMethod(firstLine.left(spaceIdx));
+    }
+
+    if (!portMatch && !isRequest && !isResponse)
+        return result;
+
+    if (isResponse) {
+        int firstSpace = firstLine.indexOf(' ');
+        if (firstSpace <= 0)
+            return result;
+        int secondSpace = firstLine.indexOf(' ', firstSpace + 1);
+        if (secondSpace <= firstSpace)
+            secondSpace = firstLine.size();
+
+        QByteArray version = firstLine.left(firstSpace);
+        QByteArray statusBytes = firstLine.mid(firstSpace + 1, secondSpace - firstSpace - 1);
+        QByteArray reasonBytes = secondSpace < firstLine.size()
+                ? firstLine.mid(secondSpace + 1).trimmed()
+                : QByteArray();
+
+        bool ok = false;
+        int statusCode = statusBytes.toInt(&ok);
+        if (!ok)
+            return result;
+
+        result.valid = true;
+        result.isRequest = false;
+        result.version = QString::fromLatin1(version);
+        result.statusCode = statusCode;
+        result.reason = QString::fromLatin1(reasonBytes);
+    }
+    else if (isRequest) {
+        int firstSpace = firstLine.indexOf(' ');
+        int secondSpace = firstLine.indexOf(' ', firstSpace + 1);
+        if (firstSpace <= 0 || secondSpace <= firstSpace)
+            return result;
+
+        QByteArray method = firstLine.left(firstSpace);
+        QByteArray target = firstLine.mid(firstSpace + 1, secondSpace - firstSpace - 1);
+        QByteArray version = firstLine.mid(secondSpace + 1).trimmed();
+        if (!version.startsWith("HTTP/"))
+            return result;
+
+        result.valid = true;
+        result.isRequest = true;
+        result.method = QString::fromLatin1(method);
+        result.target = QString::fromLatin1(target);
+        result.version = QString::fromLatin1(version);
+    }
+    else {
+        return result;
+    }
+
+    for (QByteArray &rawLine : lines) {
+        QByteArray line = rawLine.trimmed();
+        if (line.endsWith('\r'))
+            line.chop(1);
+        if (line.isEmpty())
+            continue;
+        int sep = line.indexOf(':');
+        if (sep <= 0)
+            continue;
+
+        QByteArray name = line.left(sep).trimmed();
+        QByteArray value = line.mid(sep + 1).trimmed();
+        HttpHeader header{QString::fromLatin1(name), QString::fromLatin1(value)};
+        result.headers.append(header);
+        if (name.compare("Host", Qt::CaseInsensitive) == 0)
+            result.host = header.value;
+    }
+
+    return result;
+}
+
+
+ParsedDns Sniffing::parseDns(const u_char *pkt, int linkType) const {
+    ParsedDns result;
+    auto udpView = udpDatagramView(pkt, linkType);
+    QByteArray payload;
+    bool fromTcp = false;
+
+    if (udpView.header && udpView.payloadLength > 0) {
+        quint16 sport = ntohs(udpView.header->uh_sport);
+        quint16 dport = ntohs(udpView.header->uh_dport);
+        if (!isLikelyDnsPort(sport) && !isLikelyDnsPort(dport) && udpView.payloadLength < int(sizeof(sniff_dns)))
+            return result;
+        payload = QByteArray(reinterpret_cast<const char*>(udpView.payload), udpView.payloadLength);
+    }
+    else {
+        auto tcpView = tcpSegmentView(pkt, linkType);
+        if (!tcpView.header || tcpView.payloadLength <= 2)
+            return result;
+        quint16 sport = ntohs(tcpView.header->th_sport);
+        quint16 dport = ntohs(tcpView.header->th_dport);
+        if (!isLikelyDnsPort(sport) && !isLikelyDnsPort(dport) && tcpView.payloadLength < int(sizeof(sniff_dns)) + 2)
+            return result;
+        payload = QByteArray(reinterpret_cast<const char*>(tcpView.payload), tcpView.payloadLength);
+        fromTcp = true;
+    }
+
+    if (payload.isEmpty())
+        return result;
+
+    const uint8_t *raw = reinterpret_cast<const uint8_t*>(payload.constData());
+    int rawLen = payload.size();
+    int offset = 0;
+
+    if (fromTcp) {
+        if (rawLen < 2)
+            return result;
+        int announced = (raw[0] << 8) | raw[1];
+        offset = 2;
+        if (announced > rawLen - offset)
+            announced = rawLen - offset;
+        rawLen = offset + announced;
+    }
+
+    const uint8_t *dnsData = raw + offset;
+    int dnsLen = rawLen - offset;
+    if (dnsLen < int(sizeof(sniff_dns)))
+        return result;
+
+    const sniff_dns *hdr = reinterpret_cast<const sniff_dns*>(dnsData);
+    result.id = ntohs(hdr->id);
+    uint16_t flags = ntohs(hdr->flags);
+    result.isResponse = flags & 0x8000;
+    result.opcode = (flags >> 11) & 0x0F;
+    result.authoritative = flags & 0x0400;
+    result.truncated = flags & 0x0200;
+    result.rcode = flags & 0x000F;
+
+    int qdcount = ntohs(hdr->q_count);
+    int ancount = ntohs(hdr->ans_count);
+    int nscount = ntohs(hdr->auth_count);
+    int arcount = ntohs(hdr->add_count);
+
+    int pos = sizeof(sniff_dns);
+    auto hasBytes = [&](int needed) { return pos + needed <= dnsLen; };
+
+    for (int i = 0; i < qdcount && pos < dnsLen; ++i) {
+        int next = pos;
+        QString name = decodeDnsName(dnsData, dnsLen, pos, next);
+        if (next > dnsLen)
+            break;
+        pos = next;
+        if (!hasBytes(4))
+            break;
+        quint16 qtype = (dnsData[pos] << 8) | dnsData[pos + 1];
+        quint16 qclass = (dnsData[pos + 2] << 8) | dnsData[pos + 3];
+        pos += 4;
+
+        DnsQuestion q;
+        q.name = name;
+        q.type = dnsTypeToString(qtype);
+        q.klass = dnsClassToString(qclass);
+        result.questions.append(q);
+    }
+
+    auto parseRecords = [&](int count, QVector<DnsRecord> &bucket) {
+        for (int i = 0; i < count && pos < dnsLen; ++i) {
+            int nameNext = pos;
+            QString name = decodeDnsName(dnsData, dnsLen, pos, nameNext);
+            if (nameNext > dnsLen)
+                return;
+            pos = nameNext;
+            if (!hasBytes(10))
+                return;
+
+            quint16 type = (dnsData[pos] << 8) | dnsData[pos + 1];
+            quint16 klass = (dnsData[pos + 2] << 8) | dnsData[pos + 3];
+            quint32 ttl = (quint32(dnsData[pos + 4]) << 24)
+                        | (quint32(dnsData[pos + 5]) << 16)
+                        | (quint32(dnsData[pos + 6]) << 8)
+                        | quint32(dnsData[pos + 7]);
+            quint16 rdlen = (dnsData[pos + 8] << 8) | dnsData[pos + 9];
+            pos += 10;
+            if (!hasBytes(rdlen))
+                return;
+
+            const uint8_t *rdata = dnsData + pos;
+            QString dataStr;
+
+            switch (type) {
+                case 1: {
+                    if (rdlen == 4) {
+                        char buf[INET_ADDRSTRLEN];
+                        if (inet_ntop(AF_INET, rdata, buf, sizeof(buf)))
+                            dataStr = QString::fromLatin1(buf);
+                    }
+                    break;
+                }
+                case 28: {
+                    if (rdlen == 16) {
+                        char buf6[INET6_ADDRSTRLEN];
+                        if (inet_ntop(AF_INET6, rdata, buf6, sizeof(buf6)))
+                            dataStr = QString::fromLatin1(buf6);
+                    }
+                    break;
+                }
+                case 2:
+                case 5:
+                case 12:
+                case 39: {
+                    int nameOffset = pos;
+                    int tmp = 0;
+                    dataStr = decodeDnsName(dnsData, dnsLen, nameOffset, tmp);
+                    break;
+                }
+                case 6: {
+                    int mnameOffset = pos;
+                    int tmp = 0;
+                    QString mname = decodeDnsName(dnsData, dnsLen, mnameOffset, tmp);
+                    int rnameOffset = pos + (tmp - pos);
+                    tmp = 0;
+                    QString rname = decodeDnsName(dnsData, dnsLen, rnameOffset, tmp);
+                    if (rdlen >= (tmp - pos) + 20) {
+                        int numericOffset = pos + (tmp - pos);
+                        quint32 serial = (quint32(dnsData[numericOffset]) << 24)
+                                       | (quint32(dnsData[numericOffset + 1]) << 16)
+                                       | (quint32(dnsData[numericOffset + 2]) << 8)
+                                       | quint32(dnsData[numericOffset + 3]);
+                        dataStr = QStringLiteral("%1 %2 serial %3").arg(mname, rname, QString::number(serial));
+                    } else {
+                        dataStr = QStringLiteral("%1 %2").arg(mname, rname);
+                    }
+                    break;
+                }
+                case 15: {
+                    if (rdlen >= 2) {
+                        quint16 pref = (rdata[0] << 8) | rdata[1];
+                        int nameOffset = pos + 2;
+                        int tmp = 0;
+                        QString exchanger = decodeDnsName(dnsData, dnsLen, nameOffset, tmp);
+                        dataStr = QStringLiteral("pref %1 %2").arg(pref).arg(exchanger);
+                    }
+                    break;
+                }
+                case 16: {
+                    QStringList parts;
+                    int idx = 0;
+                    while (idx < rdlen) {
+                        quint8 txtLen = rdata[idx++];
+                        if (idx + txtLen > rdlen)
+                            break;
+                        parts << QString::fromLatin1(reinterpret_cast<const char*>(rdata + idx), txtLen);
+                        idx += txtLen;
+                    }
+                    dataStr = parts.join(QStringLiteral(" "));
+                    break;
+                }
+                case 33: {
+                    if (rdlen >= 6) {
+                        quint16 priority = (rdata[0] << 8) | rdata[1];
+                        quint16 weight = (rdata[2] << 8) | rdata[3];
+                        quint16 port = (rdata[4] << 8) | rdata[5];
+                        int nameOffset = pos + 6;
+                        int tmp = 0;
+                        QString target = decodeDnsName(dnsData, dnsLen, nameOffset, tmp);
+                        dataStr = QStringLiteral("prio %1 w %2 port %3 %4")
+                                      .arg(priority)
+                                      .arg(weight)
+                                      .arg(port)
+                                      .arg(target);
+                    }
+                    break;
+                }
+                default:
+                    dataStr = QStringLiteral("0x%1").arg(bytesToHex(rdata, rdlen));
+                    break;
+            }
+
+            DnsRecord record;
+            record.name = name;
+            record.type = dnsTypeToString(type);
+            record.klass = dnsClassToString(klass);
+            record.ttl = ttl;
+            record.data = dataStr;
+            bucket.append(record);
+            pos += rdlen;
+        }
+    };
+
+    parseRecords(ancount, result.answers);
+    parseRecords(nscount, result.authorities);
+    parseRecords(arcount, result.additionals);
+
+    result.valid = true;
+    return result;
+}
+
+
+ParsedTls Sniffing::parseTls(const u_char *pkt, int linkType) const {
+    ParsedTls result;
+    auto segment = tcpSegmentView(pkt, linkType);
+    if (!segment.header || segment.payloadLength < 5)
+        return result;
+
+    quint16 sport = ntohs(segment.header->th_sport);
+    quint16 dport = ntohs(segment.header->th_dport);
+    bool portLikely = isLikelyTlsPort(sport) || isLikelyTlsPort(dport);
+
+    const uint8_t *data = segment.payload;
+    int length = segment.payloadLength;
+
+    quint8 contentType = data[0];
+    quint16 version = (data[1] << 8) | data[2];
+    quint16 recordLen = (data[3] << 8) | data[4];
+
+    if (!portLikely && contentType != 22)
+        return result;
+
+    if (recordLen + 5 > length)
+        recordLen = length - 5;
+
+    result.recordType = tlsContentTypeName(contentType);
+    result.version = tlsVersionName(version);
+
+    if (contentType != 22 || recordLen < 4)
+        return result;
+
+    const uint8_t *handshake = data + 5;
+    int remaining = qMin(recordLen, length - 5);
+    if (remaining < 4)
+        return result;
+
+    quint8 handshakeType = handshake[0];
+    int handshakeLen = (handshake[1] << 16) | (handshake[2] << 8) | handshake[3];
+    if (handshakeLen + 4 > remaining)
+        handshakeLen = remaining - 4;
+
+    result.handshakeType = tlsHandshakeTypeName(handshakeType);
+    const uint8_t *body = handshake + 4;
+    int bodyLen = qMin(handshakeLen, remaining - 4);
+
+    if (handshakeType == 1 && bodyLen >= 38) {
+        result.isClientHello = true;
+        int offset = 0;
+        quint16 clientVersion = (body[offset] << 8) | body[offset + 1];
+        offset += 2;
+        result.version = tlsVersionName(clientVersion);
+
+        if (offset + 32 > bodyLen)
+            return result;
+        offset += 32;
+
+        if (offset + 1 > bodyLen)
+            return result;
+        quint8 sessionIdLen = body[offset];
+        offset += 1;
+        if (offset + sessionIdLen > bodyLen)
+            return result;
+        offset += sessionIdLen;
+
+        if (offset + 2 > bodyLen)
+            return result;
+        quint16 cipherLen = (body[offset] << 8) | body[offset + 1];
+        offset += 2;
+        if (offset + cipherLen > bodyLen)
+            return result;
+
+        QStringList suites;
+        for (int i = 0; i + 1 < cipherLen; i += 2) {
+            quint16 cs = (body[offset + i] << 8) | body[offset + i + 1];
+            suites << tlsCipherName(cs);
+        }
+        result.cipherSuites = suites;
+        offset += cipherLen;
+
+        if (offset + 1 > bodyLen)
+            return result;
+        quint8 compressionLen = body[offset];
+        offset += 1;
+        if (offset + compressionLen > bodyLen)
+            return result;
+        offset += compressionLen;
+
+        if (offset + 2 > bodyLen) {
+            result.valid = true;
+            return result;
+        }
+
+        quint16 extensionsLen = (body[offset] << 8) | body[offset + 1];
+        offset += 2;
+        if (offset + extensionsLen > bodyLen)
+            extensionsLen = bodyLen - offset;
+
+        int extEnd = offset + extensionsLen;
+        while (offset + 4 <= extEnd) {
+            quint16 extType = (body[offset] << 8) | body[offset + 1];
+            quint16 extSize = (body[offset + 2] << 8) | body[offset + 3];
+            offset += 4;
+            if (offset + extSize > extEnd)
+                break;
+
+            if (extType == 0 && extSize >= 3) {
+                quint16 listLen = (body[offset] << 8) | body[offset + 1];
+                int namePos = offset + 2;
+                if (namePos + listLen <= offset + extSize) {
+                    while (namePos + 3 <= offset + extSize) {
+                        quint8 nameType = body[namePos];
+                        quint16 nameLen = (body[namePos + 1] << 8) | body[namePos + 2];
+                        namePos += 3;
+                        if (namePos + nameLen > offset + extSize)
+                            break;
+                        if (nameType == 0) {
+                            result.serverName = QString::fromLatin1(reinterpret_cast<const char*>(body + namePos), nameLen);
+                            break;
+                        }
+                        namePos += nameLen;
+                    }
+                }
+            }
+
+            offset += extSize;
+        }
+
+        result.valid = true;
+        return result;
+    }
+
+    if (handshakeType == 2 && bodyLen >= 38) {
+        int offset = 0;
+        quint16 serverVersion = (body[offset] << 8) | body[offset + 1];
+        offset += 2;
+        result.version = tlsVersionName(serverVersion);
+
+        if (offset + 32 > bodyLen)
+            return result;
+        offset += 32;
+
+        if (offset + 1 > bodyLen)
+            return result;
+        quint8 sessionIdLen = body[offset];
+        offset += 1;
+        if (offset + sessionIdLen > bodyLen)
+            return result;
+        offset += sessionIdLen;
+
+        if (offset + 2 > bodyLen)
+            return result;
+        quint16 selected = (body[offset] << 8) | body[offset + 1];
+        offset += 2;
+        result.selectedCipher = tlsCipherName(selected);
+
+        if (offset + 1 > bodyLen)
+            return result;
+        quint8 compression = body[offset];
+        (void)compression;
+        offset += 1;
+
+        if (offset + 2 <= bodyLen) {
+            quint16 extensionsLen = (body[offset] << 8) | body[offset + 1];
+            offset += 2;
+            if (offset + extensionsLen > bodyLen)
+                extensionsLen = bodyLen - offset;
+            offset += extensionsLen;
+        }
+
+        result.valid = true;
+        return result;
+    }
+
+    if (portLikely)
+        result.valid = true;
+
+    return result;
+}
+
 
 QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) const {
     QVector<PacketLayer> layers;
@@ -877,6 +1561,100 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
                 tcpLayer.fields.append(field);
             }
             layers.append(tcpLayer);
+
+            auto http = parseHttp(pkt, linkType);
+            if (http.valid) {
+                PacketLayer httpLayer;
+                httpLayer.name = QStringLiteral("Hypertext Transfer Protocol");
+
+                if (http.isRequest) {
+                    field.category = QStringLiteral("Request");
+                    field.label = QStringLiteral("Method");
+                    field.value = http.method;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Target");
+                    field.value = http.target;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Version");
+                    field.value = http.version;
+                    httpLayer.fields.append(field);
+
+                    if (!http.host.isEmpty()) {
+                        field.label = QStringLiteral("Host");
+                        field.value = http.host;
+                        httpLayer.fields.append(field);
+                    }
+                } else {
+                    field.category = QStringLiteral("Response");
+                    field.label = QStringLiteral("Version");
+                    field.value = http.version;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Status");
+                    field.value = QString::number(http.statusCode);
+                    httpLayer.fields.append(field);
+
+                    if (!http.reason.isEmpty()) {
+                        field.label = QStringLiteral("Reason");
+                        field.value = http.reason;
+                        httpLayer.fields.append(field);
+                    }
+                }
+
+                for (const auto &hdr : http.headers) {
+                    field.category = QStringLiteral("Headers");
+                    field.label = hdr.name;
+                    field.value = hdr.value;
+                    httpLayer.fields.append(field);
+                }
+
+                layers.append(httpLayer);
+            }
+            else {
+                auto tls = parseTls(pkt, linkType);
+                if (tls.valid) {
+                    PacketLayer tlsLayer;
+                    tlsLayer.name = QStringLiteral("Transport Layer Security");
+
+                    field.category = QStringLiteral("Record");
+                    field.label = QStringLiteral("Content Type");
+                    field.value = tls.recordType;
+                    tlsLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Version");
+                    field.value = tls.version;
+                    tlsLayer.fields.append(field);
+
+                    if (!tls.handshakeType.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Type");
+                        field.value = tls.handshakeType;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.serverName.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Server Name");
+                        field.value = tls.serverName;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.selectedCipher.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Cipher");
+                        field.value = tls.selectedCipher;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.cipherSuites.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Cipher Suites");
+                        field.value = tls.cipherSuites.join(QStringLiteral(", "));
+                        tlsLayer.fields.append(field);
+                    }
+
+                    layers.append(tlsLayer);
+                }
+            }
         }
         // --- UDP ---
         else if (ip->ip_p == IPPROTO_UDP) {
@@ -894,6 +1672,79 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
                 udpLayer.fields.append(field);
             }
             layers.append(udpLayer);
+
+            auto dns = parseDns(pkt, linkType);
+            if (dns.valid) {
+                PacketLayer dnsLayer;
+                dnsLayer.name = QStringLiteral("Domain Name System");
+
+                field.category = QStringLiteral("Header");
+                field.label = QStringLiteral("Transaction ID");
+                field.value = QStringLiteral("0x%1").arg(dns.id, 4, 16, QLatin1Char('0')).toUpper();
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Type");
+                field.value = dns.isResponse ? QStringLiteral("Response") : QStringLiteral("Query");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Opcode");
+                field.value = QString::number(dns.opcode);
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Authoritative");
+                field.value = dns.authoritative ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Truncated");
+                field.value = dns.truncated ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                if (dns.rcode) {
+                    field.label = QStringLiteral("RCode");
+                    field.value = QString::number(dns.rcode);
+                    dnsLayer.fields.append(field);
+                }
+
+                for (int i = 0; i < dns.questions.size(); ++i) {
+                    const auto &q = dns.questions.at(i);
+                    field.category = QStringLiteral("Questions");
+                    field.label = QStringLiteral("Q%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 %3").arg(q.name, q.type, q.klass);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.answers.size(); ++i) {
+                    const auto &r = dns.answers.at(i);
+                    field.category = QStringLiteral("Answers");
+                    field.label = QStringLiteral("A%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.authorities.size(); ++i) {
+                    const auto &r = dns.authorities.at(i);
+                    field.category = QStringLiteral("Authority");
+                    field.label = QStringLiteral("NS%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.additionals.size(); ++i) {
+                    const auto &r = dns.additionals.at(i);
+                    field.category = QStringLiteral("Additional");
+                    field.label = QStringLiteral("AD%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+
+                layers.append(dnsLayer);
+            }
         }
         // --- ICMPv4 ---
         else if (ip->ip_p == IPPROTO_ICMP) {
@@ -1150,6 +2001,100 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
                 tcp6Layer.fields.append(field);
             }
             layers.append(tcp6Layer);
+
+            auto http = parseHttp(pkt, linkType);
+            if (http.valid) {
+                PacketLayer httpLayer;
+                httpLayer.name = QStringLiteral("Hypertext Transfer Protocol");
+
+                if (http.isRequest) {
+                    field.category = QStringLiteral("Request");
+                    field.label = QStringLiteral("Method");
+                    field.value = http.method;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Target");
+                    field.value = http.target;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Version");
+                    field.value = http.version;
+                    httpLayer.fields.append(field);
+
+                    if (!http.host.isEmpty()) {
+                        field.label = QStringLiteral("Host");
+                        field.value = http.host;
+                        httpLayer.fields.append(field);
+                    }
+                } else {
+                    field.category = QStringLiteral("Response");
+                    field.label = QStringLiteral("Version");
+                    field.value = http.version;
+                    httpLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Status");
+                    field.value = QString::number(http.statusCode);
+                    httpLayer.fields.append(field);
+
+                    if (!http.reason.isEmpty()) {
+                        field.label = QStringLiteral("Reason");
+                        field.value = http.reason;
+                        httpLayer.fields.append(field);
+                    }
+                }
+
+                for (const auto &hdr : http.headers) {
+                    field.category = QStringLiteral("Headers");
+                    field.label = hdr.name;
+                    field.value = hdr.value;
+                    httpLayer.fields.append(field);
+                }
+
+                layers.append(httpLayer);
+            }
+            else {
+                auto tls = parseTls(pkt, linkType);
+                if (tls.valid) {
+                    PacketLayer tlsLayer;
+                    tlsLayer.name = QStringLiteral("Transport Layer Security");
+
+                    field.category = QStringLiteral("Record");
+                    field.label = QStringLiteral("Content Type");
+                    field.value = tls.recordType;
+                    tlsLayer.fields.append(field);
+
+                    field.label = QStringLiteral("Version");
+                    field.value = tls.version;
+                    tlsLayer.fields.append(field);
+
+                    if (!tls.handshakeType.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Type");
+                        field.value = tls.handshakeType;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.serverName.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Server Name");
+                        field.value = tls.serverName;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.selectedCipher.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Cipher");
+                        field.value = tls.selectedCipher;
+                        tlsLayer.fields.append(field);
+                    }
+                    if (!tls.cipherSuites.isEmpty()) {
+                        field.category = QStringLiteral("Handshake");
+                        field.label = QStringLiteral("Cipher Suites");
+                        field.value = tls.cipherSuites.join(QStringLiteral(", "));
+                        tlsLayer.fields.append(field);
+                    }
+
+                    layers.append(tlsLayer);
+                }
+            }
         }
         // --- UDP ---
         else if (ip6->ip6_nxt == IPPROTO_UDP) {
@@ -1167,6 +2112,79 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
                 udp6Layer.fields.append(field);
             }
             layers.append(udp6Layer);
+
+            auto dns = parseDns(pkt, linkType);
+            if (dns.valid) {
+                PacketLayer dnsLayer;
+                dnsLayer.name = QStringLiteral("Domain Name System");
+
+                field.category = QStringLiteral("Header");
+                field.label = QStringLiteral("Transaction ID");
+                field.value = QStringLiteral("0x%1").arg(dns.id, 4, 16, QLatin1Char('0')).toUpper();
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Type");
+                field.value = dns.isResponse ? QStringLiteral("Response") : QStringLiteral("Query");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Opcode");
+                field.value = QString::number(dns.opcode);
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Authoritative");
+                field.value = dns.authoritative ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Truncated");
+                field.value = dns.truncated ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                if (dns.rcode) {
+                    field.label = QStringLiteral("RCode");
+                    field.value = QString::number(dns.rcode);
+                    dnsLayer.fields.append(field);
+                }
+
+                for (int i = 0; i < dns.questions.size(); ++i) {
+                    const auto &q = dns.questions.at(i);
+                    field.category = QStringLiteral("Questions");
+                    field.label = QStringLiteral("Q%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 %3").arg(q.name, q.type, q.klass);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.answers.size(); ++i) {
+                    const auto &r = dns.answers.at(i);
+                    field.category = QStringLiteral("Answers");
+                    field.label = QStringLiteral("A%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.authorities.size(); ++i) {
+                    const auto &r = dns.authorities.at(i);
+                    field.category = QStringLiteral("Authority");
+                    field.label = QStringLiteral("NS%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+                for (int i = 0; i < dns.additionals.size(); ++i) {
+                    const auto &r = dns.additionals.at(i);
+                    field.category = QStringLiteral("Additional");
+                    field.label = QStringLiteral("AD%1").arg(i + 1);
+                    field.value = QStringLiteral("%1 %2 TTL %3 %4")
+                        .arg(r.name, r.type)
+                        .arg(r.ttl)
+                        .arg(r.data);
+                    dnsLayer.fields.append(field);
+                }
+
+                layers.append(dnsLayer);
+            }
         }
         // --- ICMPv6 ---
         else if (ip6->ip6_nxt == IPPROTO_ICMPV6) {

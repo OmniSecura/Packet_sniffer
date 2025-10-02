@@ -97,6 +97,7 @@ void MainWindow::showColorizeCustomizer() {
 }
 
 
+
 QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, int linkType)
 {
     QStringList infoValues;
@@ -108,24 +109,81 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, 
     };
 
     if (proto == QLatin1String("TCP")) {
-        // parseTcp() returns { src, dst, sport, dport,
-        //                       seq, ack, hdrlen, flags, win, sum, urp }
-        assign(parser.parseTcp(pkt, linkType), 4);
+        bool handled = false;
+        ParsedHttp http = parser.parseHttp(pkt, linkType);
+        if (http.valid) {
+            handled = true;
+            if (http.isRequest) {
+                infoValues << tr("HTTP %1 %2").arg(http.method, http.target);
+                if (!http.host.isEmpty())
+                    infoValues << tr("Host: %1").arg(http.host);
+            } else {
+                QString statusText = QString::number(http.statusCode);
+                if (!http.reason.isEmpty())
+                    statusText += QLatin1Char(' ') + http.reason;
+                infoValues << tr("HTTP %1 %2").arg(http.version, statusText);
+            }
+        } else {
+            ParsedTls tls = parser.parseTls(pkt, linkType);
+            if (tls.valid) {
+                handled = true;
+                const QString handshake = tls.handshakeType.isEmpty()
+                        ? tls.recordType
+                        : tls.handshakeType;
+                infoValues << tr("TLS %1").arg(handshake);
+                infoValues << tr("Version %1").arg(tls.version);
+                if (!tls.serverName.isEmpty())
+                    infoValues << tr("SNI %1").arg(tls.serverName);
+                if (!tls.selectedCipher.isEmpty())
+                    infoValues << tr("Cipher %1").arg(tls.selectedCipher);
+                else if (!tls.cipherSuites.isEmpty())
+                    infoValues << tr("Cipher %1").arg(tls.cipherSuites.first());
+            } else {
+                ParsedDns dns = parser.parseDns(pkt, linkType);
+                if (dns.valid) {
+                    handled = true;
+                    QString mode = dns.isResponse ? tr("Response") : tr("Query");
+                    if (!dns.questions.isEmpty()) {
+                        const auto &q = dns.questions.first();
+                        infoValues << tr("DNS %1 %2 %3").arg(mode, q.name, q.type);
+                    } else {
+                        infoValues << tr("DNS %1").arg(mode);
+                    }
+                    infoValues << tr("Q:%1 A:%2").arg(dns.questions.size()).arg(dns.answers.size());
+                    if (dns.isResponse && !dns.answers.isEmpty() && !dns.answers.first().data.isEmpty())
+                        infoValues << tr("Ans: %1").arg(dns.answers.first().data);
+                }
+            }
+        }
+        if (!handled)
+            assign(parser.parseTcp(pkt, linkType), 4);
     }
     else if (proto == QLatin1String("UDP")) {
-        // parseUdp() returns { src, dst, sport, dport, len, sum }
-        assign(parser.parseUdp(pkt, linkType), 4);
+        bool handled = false;
+        ParsedDns dns = parser.parseDns(pkt, linkType);
+        if (dns.valid) {
+            handled = true;
+            QString mode = dns.isResponse ? tr("Response") : tr("Query");
+            if (!dns.questions.isEmpty()) {
+                const auto &q = dns.questions.first();
+                infoValues << tr("DNS %1 %2 %3").arg(mode, q.name, q.type);
+            } else {
+                infoValues << tr("DNS %1").arg(mode);
+            }
+            infoValues << tr("Q:%1 A:%2").arg(dns.questions.size()).arg(dns.answers.size());
+            if (dns.isResponse && !dns.answers.isEmpty() && !dns.answers.first().data.isEmpty())
+                infoValues << tr("Ans: %1").arg(dns.answers.first().data);
+        }
+        if (!handled)
+            assign(parser.parseUdp(pkt, linkType), 4);
     }
     else if (proto == QLatin1String("ARP")) {
-        // parseArp() returns { sip, tip, hrd, pro, hln, pln, op, sha, tha, smac, dmac }
         assign(parser.parseArp(pkt, linkType), 2);
     }
     else if (proto == QLatin1String("ICMP")) {
-        // parseIcmp() returns { type, code, checksum, identifier, sequence, message }
         assign(parser.parseIcmp(pkt, linkType));
     }
     else if (proto == QLatin1String("ICMPv6")) {
-        // parseIcmpv6() returns { type, code, checksum, identifier, sequence, message }
         assign(parser.parseIcmpv6(pkt, linkType));
     }
     else if (proto == QLatin1String("IGMP")) {
@@ -179,7 +237,6 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, 
     else if (proto == QLatin1String("MH")) {
         assign(parser.parseIpv6Mobility(pkt, linkType));
     }
-
     if (infoValues.isEmpty())
         infoValues << QStringLiteral("-");
 
