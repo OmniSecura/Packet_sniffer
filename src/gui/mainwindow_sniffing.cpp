@@ -81,7 +81,8 @@ void MainWindow::stopSniffing() {
 }
 
 void MainWindow::handlePacket(const QByteArray &raw,
-                              const QStringList &infos) 
+                              const QStringList &infos,
+                              int linkType)
 {
     // == TIME ==
     QDateTime pktTime = QDateTime::currentDateTime();
@@ -103,7 +104,7 @@ void MainWindow::handlePacket(const QByteArray &raw,
                      << time;
 
     const u_char *pkt = reinterpret_cast<const u_char*>(raw.constData());
-    auto parts = parser.packetSummary(pkt, raw.size());
+    auto parts = parser.packetSummary(pkt, raw.size(), linkType);
     // parts = { srcIP, dstIP, protoName, lengthStr }
     // for (int c = 2; c < 6; ++c) {
     //     packetTable->setItem(row, c,
@@ -115,13 +116,14 @@ void MainWindow::handlePacket(const QByteArray &raw,
                  << parts.value(2)
                  << parts.value(3);
 
-    QStringList infoValues = infoColumn(parts, pkt);
+    QStringList infoValues = infoColumn(parts, pkt, linkType);
 
     // auto *infoItem = new QTableWidgetItem(infoValues.join("  "));
     // infoItem->setData(Qt::UserRole, raw);
     // packetTable->setItem(row, 6, infoItem);  //QTableWidget before QTableView
     tableRow.columns << infoValues.join("  ");
     tableRow.rawData = raw;
+    tableRow.linkType = linkType;
 
     pcap_pkthdr hdr{{ infos[0].toLongLong(), 0 },
                     (bpf_u_int32)raw.size(),

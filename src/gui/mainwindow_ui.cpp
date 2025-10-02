@@ -121,10 +121,10 @@ void MainWindow::setupUI() {
         if (!fileName.isEmpty()) {
             parser.openFromPcap(fileName);
 
-            for (const QByteArray &raw : parser.getAllPackets()) {
+            for (const CapturedPacket &packet : parser.getAllPackets()) {
                 QStringList infos;
-                infos << QString::number(0) << QString::number(raw.size()); 
-                handlePacket(raw, infos);
+                infos << QString::number(0) << QString::number(packet.data.size());
+                handlePacket(packet.data, infos, packet.linkType);
             }
         }
     });

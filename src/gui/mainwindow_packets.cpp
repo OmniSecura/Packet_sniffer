@@ -26,10 +26,11 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
     const QString srcIp = r.columns.value(2);
     const QString dstIp = r.columns.value(3);
     const QByteArray raw = r.rawData;
-    
+    const int linkType = r.linkType;
+
     const u_char *pkt = reinterpret_cast<const u_char*>(raw.constData());
-    
-    const auto layers = parser.parseLayers(pkt);
+
+    const auto layers = parser.parseLayers(pkt, linkType);
     for (const auto &lay : layers) {
         addLayerToTree(detailsTree, lay);
     }
@@ -68,11 +69,11 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
         mapWidget->highlightCountries(isoCodes);
 
     // --- Payload hex dump ---
-    const auto et = ethType(pkt);
+    const auto et = ethType(pkt, linkType);
     const int iphdr = (et == ETHERTYPE_IP
-                       ? IP_HL(ipv4Hdr(pkt)) * 4
+                       ? IP_HL(ipv4Hdr(pkt, linkType)) * 4
                        : 0);
-    const int header_len = linkHdrLen() + iphdr;
+    const int header_len = linkHdrLen(linkType) + iphdr;
     const QByteArray payload = raw.mid(header_len);
     hexEdit->setPlainText(
         parser.toHexAscii(
@@ -96,7 +97,7 @@ void MainWindow::showColorizeCustomizer() {
 }
 
 
-QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt)
+QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, int linkType)
 {
     QStringList infoValues;
 
@@ -109,74 +110,74 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt)
     if (proto == QLatin1String("TCP")) {
         // parseTcp() returns { src, dst, sport, dport,
         //                       seq, ack, hdrlen, flags, win, sum, urp }
-        assign(parser.parseTcp(pkt), 4);
+        assign(parser.parseTcp(pkt, linkType), 4);
     }
     else if (proto == QLatin1String("UDP")) {
         // parseUdp() returns { src, dst, sport, dport, len, sum }
-        assign(parser.parseUdp(pkt), 4);
+        assign(parser.parseUdp(pkt, linkType), 4);
     }
     else if (proto == QLatin1String("ARP")) {
         // parseArp() returns { sip, tip, hrd, pro, hln, pln, op, sha, tha, smac, dmac }
-        assign(parser.parseArp(pkt), 2);
+        assign(parser.parseArp(pkt, linkType), 2);
     }
     else if (proto == QLatin1String("ICMP")) {
         // parseIcmp() returns { type, code, checksum, identifier, sequence, message }
-        assign(parser.parseIcmp(pkt));
+        assign(parser.parseIcmp(pkt, linkType));
     }
     else if (proto == QLatin1String("ICMPv6")) {
         // parseIcmpv6() returns { type, code, checksum, identifier, sequence, message }
-        assign(parser.parseIcmpv6(pkt));
+        assign(parser.parseIcmpv6(pkt, linkType));
     }
     else if (proto == QLatin1String("IGMP")) {
-        assign(parser.parseIgmp(pkt));
+        assign(parser.parseIgmp(pkt, linkType));
     }
     else if (proto == QLatin1String("SCTP")) {
-        assign(parser.parseSctp(pkt));
+        assign(parser.parseSctp(pkt, linkType));
     }
     else if (proto == QLatin1String("UDPLITE")) {
-        assign(parser.parseUdplite(pkt));
+        assign(parser.parseUdplite(pkt, linkType));
     }
     else if (proto == QLatin1String("GRE")) {
-        assign(parser.parseGre(pkt));
+        assign(parser.parseGre(pkt, linkType));
     }
     else if (proto == QLatin1String("IPIP")) {
-        assign(parser.parseIpip(pkt));
+        assign(parser.parseIpip(pkt, linkType));
     }
     else if (proto == QLatin1String("OSPF")) {
-        assign(parser.parseOspf(pkt));
+        assign(parser.parseOspf(pkt, linkType));
     }
     else if (proto == QLatin1String("RSVP")) {
-        assign(parser.parseRsvp(pkt));
+        assign(parser.parseRsvp(pkt, linkType));
     }
     else if (proto == QLatin1String("PIM")) {
-        assign(parser.parsePim(pkt));
+        assign(parser.parsePim(pkt, linkType));
     }
     else if (proto == QLatin1String("EGP")) {
-        assign(parser.parseEgp(pkt));
+        assign(parser.parseEgp(pkt, linkType));
     }
     else if (proto == QLatin1String("AH")) {
-        assign(parser.parseAh(pkt));
+        assign(parser.parseAh(pkt, linkType));
     }
     else if (proto == QLatin1String("ESP")) {
-        assign(parser.parseEsp(pkt));
+        assign(parser.parseEsp(pkt, linkType));
     }
     else if (proto == QLatin1String("MPLS")) {
-        assign(parser.parseMpls(pkt));
+        assign(parser.parseMpls(pkt, linkType));
     }
     else if (proto == QLatin1String("HOPOPTS")) {
-        assign(parser.parseIpv6HopByHop(pkt));
+        assign(parser.parseIpv6HopByHop(pkt, linkType));
     }
     else if (proto == QLatin1String("ROUTING")) {
-        assign(parser.parseIpv6Routing(pkt));
+        assign(parser.parseIpv6Routing(pkt, linkType));
     }
     else if (proto == QLatin1String("FRAGMENT")) {
-        assign(parser.parseIpv6Fragment(pkt));
+        assign(parser.parseIpv6Fragment(pkt, linkType));
     }
     else if (proto == QLatin1String("DSTOPTS")) {
-        assign(parser.parseIpv6Destination(pkt));
+        assign(parser.parseIpv6Destination(pkt, linkType));
     }
     else if (proto == QLatin1String("MH")) {
-        assign(parser.parseIpv6Mobility(pkt));
+        assign(parser.parseIpv6Mobility(pkt, linkType));
     }
 
     if (infoValues.isEmpty())

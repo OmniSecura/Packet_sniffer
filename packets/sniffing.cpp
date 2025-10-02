@@ -1,23 +1,12 @@
 #include "sniffing.h"
 #include "packethelpers.h"
+#include "src/packetworker.h"
 #include <ctype.h>
 #include <QMutexLocker>
-#include <atomic>
 #include <linux/if_packet.h>
+#include <QSet>
 
 namespace {
-std::atomic<int> g_linkType{DLT_EN10MB};
-std::atomic<int> g_linkHdrLen{SIZE_ETHERNET};
-
-int computeLinkHeaderLen(int linkType) {
-    switch (linkType) {
-        case DLT_LINUX_SLL:
-            return LINUX_SLL_HEADER_LEN;
-        default:
-            return SIZE_ETHERNET;
-    }
-}
-
 QString packetTypeToString(uint16_t type) {
     switch (type) {
         case PACKET_HOST:       return QStringLiteral("HOST");
@@ -45,19 +34,6 @@ QString cookedAddressToString(const sniff_linux_cooked *hdr) {
 }
 }
 
-void Sniffing::setLinkLayer(int linkType) {
-    g_linkType.store(linkType, std::memory_order_relaxed);
-    g_linkHdrLen.store(computeLinkHeaderLen(linkType), std::memory_order_relaxed);
-}
-
-int Sniffing::linkHeaderLength() {
-    return g_linkHdrLen.load(std::memory_order_relaxed);
-}
-
-int Sniffing::linkType() {
-    return g_linkType.load(std::memory_order_relaxed);
-}
-
 Sniffing::Sniffing() {}
 Sniffing::~Sniffing() {}
 
@@ -69,13 +45,14 @@ void Sniffing::packet_callback(u_char *args,
     QByteArray raw(reinterpret_cast<const char*>(packet),
                    header->caplen);
 
-    Sniffing::appendPacket(raw);
+    CapturedPacket captured{raw, worker ? worker->linkType() : DLT_EN10MB};
+    Sniffing::appendPacket(captured);
 
     QStringList infos;
     infos << QString::number(header->ts.tv_sec)
           << QString::number(header->caplen);
 
-    emit worker->newPacket(raw, infos);
+    emit worker->newPacket(raw, infos, captured.linkType);
 }
 
 
@@ -119,15 +96,16 @@ QString Sniffing::toHexAscii(const u_char *data, int len) const {
 
 // --- simple summary for table ---
 QStringList Sniffing::packetSummary(const u_char *packet,
-                                    int total_len) const
+                                    int total_len,
+                                    int linkType) const
 {
-    uint16_t ethertype = ethType(packet);
+    uint16_t ethertype = ethType(packet, linkType);
     QString src   = "-",
             dst   = "-",
             proto = "OTHER";
 
     if (ethertype == ETHERTYPE_IP) {
-        auto ip  = ipv4Hdr(packet);
+        auto ip  = ipv4Hdr(packet, linkType);
 
         char buf[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &ip->ip_src, buf, sizeof(buf));
@@ -163,11 +141,11 @@ QStringList Sniffing::packetSummary(const u_char *packet,
         }
     }
     else if (ethertype == ETHERTYPE_ARP) {
-      auto arpData = parseArp(packet);
+      auto arpData = parseArp(packet, linkType);
       return { arpData[0], arpData[1], "ARP", QString::number(total_len) };
     }
     else if (ethertype == ETHERTYPE_IPV6) {
-        auto ip6 = ipv6Hdr(packet);
+        auto ip6 = ipv6Hdr(packet, linkType);
 
         char buf6[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, &ip6->ip6_src, buf6, sizeof(buf6));
@@ -200,8 +178,8 @@ QStringList Sniffing::packetSummary(const u_char *packet,
     return { src, dst, proto, len };
 }
 
-QStringList Sniffing::parseArp(const u_char *pkt) const {
-    auto arp = arpHdr(pkt);
+QStringList Sniffing::parseArp(const u_char *pkt, int linkType) const {
+    auto arp = arpHdr(pkt, linkType);
 
     in_addr sip{}, tip{};
     memcpy(&sip, arp->ar_sip, 4);
@@ -220,8 +198,8 @@ QStringList Sniffing::parseArp(const u_char *pkt) const {
     return { sipStr, tipStr, hrd, pro, hln, pln, op, sha, tha};
 }
 
-QStringList Sniffing::parseTcp(const u_char *pkt) const {
-    uint16_t ethertype = ethType(pkt);
+QStringList Sniffing::parseTcp(const u_char *pkt, int linkType) const {
+    uint16_t ethertype = ethType(pkt, linkType);
     
     const sniff_tcp *tcp = nullptr;
     char buf6[INET6_ADDRSTRLEN];
@@ -229,16 +207,16 @@ QStringList Sniffing::parseTcp(const u_char *pkt) const {
 
     QString src, dst;
     if (ethertype == ETHERTYPE_IP){
-        auto ip = ipv4Hdr(pkt);
-        tcp = tcpHdr(pkt);
+        auto ip = ipv4Hdr(pkt, linkType);
+        tcp = tcpHdr(pkt, linkType);
         inet_ntop(AF_INET, &ip->ip_src, buf, sizeof(buf));
             src = QString::fromLatin1(buf);
         inet_ntop(AF_INET, &ip->ip_dst, buf, sizeof(buf));
             dst = QString::fromLatin1(buf);
     }
     else if (ethertype == ETHERTYPE_IPV6) {
-        auto ip6 = ipv6Hdr(pkt);
-        tcp = tcp6Hdr(pkt);
+        auto ip6 = ipv6Hdr(pkt, linkType);
+        tcp = tcp6Hdr(pkt, linkType);
         inet_ntop(AF_INET6, &ip6->ip6_src, buf6, sizeof(buf6));
             src = QString::fromLatin1(buf6);
         inet_ntop(AF_INET6, &ip6->ip6_dst, buf6, sizeof(buf6));
@@ -284,24 +262,24 @@ QStringList Sniffing::parseTcp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseUdp(const u_char *pkt) const {
-    uint16_t ethertype = ethType(pkt);
+QStringList Sniffing::parseUdp(const u_char *pkt, int linkType) const {
+    uint16_t ethertype = ethType(pkt, linkType);
 
     const sniff_udp *udp = nullptr;
     char buf[INET_ADDRSTRLEN];
     char buf6[INET6_ADDRSTRLEN];
     QString src, dst;
     if (ethertype == ETHERTYPE_IP){
-        auto ip = ipv4Hdr(pkt);
-        udp = udpHdr(pkt);
+        auto ip = ipv4Hdr(pkt, linkType);
+        udp = udpHdr(pkt, linkType);
         if (inet_ntop(AF_INET, &ip->ip_src, buf, sizeof(buf)))
             src = QString::fromLatin1(buf);
         if (inet_ntop(AF_INET, &ip->ip_dst, buf, sizeof(buf)))
             dst = QString::fromLatin1(buf);
     }
     else if (ethertype == ETHERTYPE_IPV6){
-        auto ip6 = ipv6Hdr(pkt);
-        udp = udp6Hdr(pkt);
+        auto ip6 = ipv6Hdr(pkt, linkType);
+        udp = udp6Hdr(pkt, linkType);
         if (inet_ntop(AF_INET6, &ip6->ip6_src, buf6, sizeof(buf6)))
             src = QString::fromLatin1(buf6);
         if (inet_ntop(AF_INET6, &ip6->ip6_dst, buf6, sizeof(buf6)))
@@ -325,8 +303,8 @@ QStringList Sniffing::parseUdp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIcmp(const u_char *pkt) const {
-    auto icmp = icmpHdr(pkt);
+QStringList Sniffing::parseIcmp(const u_char *pkt, int linkType) const {
+    auto icmp = icmpHdr(pkt, linkType);
     QString message;
     uint8_t type = icmp->icmp_type;
     uint8_t code = icmp->icmp_code;
@@ -409,8 +387,8 @@ QStringList Sniffing::parseIcmp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIcmpv6(const u_char *pkt) const {
-    auto icmp6 = icmp6Hdr(pkt);
+QStringList Sniffing::parseIcmpv6(const u_char *pkt, int linkType) const {
+    auto icmp6 = icmp6Hdr(pkt, linkType);
     if (!icmp6) return {};
 
     uint8_t type = icmp6->icmp6_type;
@@ -454,8 +432,8 @@ QStringList Sniffing::parseIcmpv6(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIgmp(const u_char *pkt) const {
-    auto igmp = reinterpret_cast<const sniff_igmpv1v2*>(ipv4Payload(pkt));
+QStringList Sniffing::parseIgmp(const u_char *pkt, int linkType) const {
+    auto igmp = reinterpret_cast<const sniff_igmpv1v2*>(ipv4Payload(pkt, linkType));
     if (!igmp) return {};
 
     uint8_t type = igmp->type;
@@ -480,14 +458,14 @@ QStringList Sniffing::parseIgmp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseSctp(const u_char *pkt) const {
+QStringList Sniffing::parseSctp(const u_char *pkt, int linkType) const {
     const sniff_sctp *sctp = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        sctp = reinterpret_cast<const sniff_sctp*>(ipv4Payload(pkt));
+        sctp = reinterpret_cast<const sniff_sctp*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        sctp = reinterpret_cast<const sniff_sctp*>(ipv6Payload(pkt));
+        sctp = reinterpret_cast<const sniff_sctp*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -503,14 +481,14 @@ QStringList Sniffing::parseSctp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseUdplite(const u_char *pkt) const {
+QStringList Sniffing::parseUdplite(const u_char *pkt, int linkType) const {
     const sniff_udplite *udplite = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        udplite = reinterpret_cast<const sniff_udplite*>(ipv4Payload(pkt));
+        udplite = reinterpret_cast<const sniff_udplite*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        udplite = reinterpret_cast<const sniff_udplite*>(ipv6Payload(pkt));
+        udplite = reinterpret_cast<const sniff_udplite*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -526,14 +504,14 @@ QStringList Sniffing::parseUdplite(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseGre(const u_char *pkt) const {
+QStringList Sniffing::parseGre(const u_char *pkt, int linkType) const {
     const sniff_gre *gre = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        gre = reinterpret_cast<const sniff_gre*>(ipv4Payload(pkt));
+        gre = reinterpret_cast<const sniff_gre*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        gre = reinterpret_cast<const sniff_gre*>(ipv6Payload(pkt));
+        gre = reinterpret_cast<const sniff_gre*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -552,8 +530,8 @@ QStringList Sniffing::parseGre(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseOspf(const u_char *pkt) const {
-    auto ospf = reinterpret_cast<const sniff_ospf*>(ipv4Payload(pkt));
+QStringList Sniffing::parseOspf(const u_char *pkt, int linkType) const {
+    auto ospf = reinterpret_cast<const sniff_ospf*>(ipv4Payload(pkt, linkType));
     if (!ospf) return {};
 
     QStringList out;
@@ -568,14 +546,14 @@ QStringList Sniffing::parseOspf(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseRsvp(const u_char *pkt) const {
+QStringList Sniffing::parseRsvp(const u_char *pkt, int linkType) const {
     const sniff_rsvp *rsvp = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv4Payload(pkt));
+        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv6Payload(pkt));
+        rsvp = reinterpret_cast<const sniff_rsvp*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -592,14 +570,14 @@ QStringList Sniffing::parseRsvp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parsePim(const u_char *pkt) const {
+QStringList Sniffing::parsePim(const u_char *pkt, int linkType) const {
     const sniff_pim *pim = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        pim = reinterpret_cast<const sniff_pim*>(ipv4Payload(pkt));
+        pim = reinterpret_cast<const sniff_pim*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        pim = reinterpret_cast<const sniff_pim*>(ipv6Payload(pkt));
+        pim = reinterpret_cast<const sniff_pim*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -617,8 +595,8 @@ QStringList Sniffing::parsePim(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseEgp(const u_char *pkt) const {
-    auto egp = reinterpret_cast<const sniff_egp*>(ipv4Payload(pkt));
+QStringList Sniffing::parseEgp(const u_char *pkt, int linkType) const {
+    auto egp = reinterpret_cast<const sniff_egp*>(ipv4Payload(pkt, linkType));
     if (!egp) return {};
 
     QStringList out;
@@ -633,14 +611,14 @@ QStringList Sniffing::parseEgp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseAh(const u_char *pkt) const {
+QStringList Sniffing::parseAh(const u_char *pkt, int linkType) const {
     const sniff_ipsec_ah *ah = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv4Payload(pkt));
+        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv6Payload(pkt));
+        ah = reinterpret_cast<const sniff_ipsec_ah*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -656,14 +634,14 @@ QStringList Sniffing::parseAh(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseEsp(const u_char *pkt) const {
+QStringList Sniffing::parseEsp(const u_char *pkt, int linkType) const {
     const sniff_ipsec_esp *esp = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv4Payload(pkt));
+        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv6Payload(pkt));
+        esp = reinterpret_cast<const sniff_ipsec_esp*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -677,14 +655,14 @@ QStringList Sniffing::parseEsp(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseMpls(const u_char *pkt) const {
+QStringList Sniffing::parseMpls(const u_char *pkt, int linkType) const {
     const sniff_mpls *mpls = nullptr;
-    uint16_t ethertype = ethType(pkt);
+    uint16_t ethertype = ethType(pkt, linkType);
 
     if (ethertype == ETHERTYPE_IP) {
-        mpls = reinterpret_cast<const sniff_mpls*>(ipv4Payload(pkt));
+        mpls = reinterpret_cast<const sniff_mpls*>(ipv4Payload(pkt, linkType));
     } else if (ethertype == ETHERTYPE_IPV6) {
-        mpls = reinterpret_cast<const sniff_mpls*>(ipv6Payload(pkt));
+        mpls = reinterpret_cast<const sniff_mpls*>(ipv6Payload(pkt, linkType));
     } else {
         return {};
     }
@@ -706,8 +684,8 @@ QStringList Sniffing::parseMpls(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpip(const u_char *pkt) const {
-    auto innerIp = reinterpret_cast<const sniff_ip*>(ipv4Payload(pkt));
+QStringList Sniffing::parseIpip(const u_char *pkt, int linkType) const {
+    auto innerIp = reinterpret_cast<const sniff_ip*>(ipv4Payload(pkt, linkType));
     if (!innerIp) return {};
 
     QStringList out;
@@ -719,8 +697,8 @@ QStringList Sniffing::parseIpip(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpv6HopByHop(const u_char *pkt) const {
-    auto hop = reinterpret_cast<const sniff_ipv6_hopopts*>(ipv6Payload(pkt));
+QStringList Sniffing::parseIpv6HopByHop(const u_char *pkt, int linkType) const {
+    auto hop = reinterpret_cast<const sniff_ipv6_hopopts*>(ipv6Payload(pkt, linkType));
     if (!hop) return {};
 
     QStringList out;
@@ -731,8 +709,8 @@ QStringList Sniffing::parseIpv6HopByHop(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpv6Routing(const u_char *pkt) const {
-    auto routing = reinterpret_cast<const sniff_ipv6_routing*>(ipv6Payload(pkt));
+QStringList Sniffing::parseIpv6Routing(const u_char *pkt, int linkType) const {
+    auto routing = reinterpret_cast<const sniff_ipv6_routing*>(ipv6Payload(pkt, linkType));
     if (!routing) return {};
 
     QStringList out;
@@ -744,8 +722,8 @@ QStringList Sniffing::parseIpv6Routing(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpv6Fragment(const u_char *pkt) const {
-    auto frag = reinterpret_cast<const sniff_ipv6_fragment*>(ipv6Payload(pkt));
+QStringList Sniffing::parseIpv6Fragment(const u_char *pkt, int linkType) const {
+    auto frag = reinterpret_cast<const sniff_ipv6_fragment*>(ipv6Payload(pkt, linkType));
     if (!frag) return {};
 
     uint16_t offsetField = ntohs(frag->frag_offset);
@@ -762,8 +740,8 @@ QStringList Sniffing::parseIpv6Fragment(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpv6Destination(const u_char *pkt) const {
-    auto dest = reinterpret_cast<const sniff_ipv6_dstopts*>(ipv6Payload(pkt));
+QStringList Sniffing::parseIpv6Destination(const u_char *pkt, int linkType) const {
+    auto dest = reinterpret_cast<const sniff_ipv6_dstopts*>(ipv6Payload(pkt, linkType));
     if (!dest) return {};
 
     QStringList out;
@@ -774,8 +752,8 @@ QStringList Sniffing::parseIpv6Destination(const u_char *pkt) const {
     return out;
 }
 
-QStringList Sniffing::parseIpv6Mobility(const u_char *pkt) const {
-    auto mobility = reinterpret_cast<const sniff_ipv6_mobility*>(ipv6Payload(pkt));
+QStringList Sniffing::parseIpv6Mobility(const u_char *pkt, int linkType) const {
+    auto mobility = reinterpret_cast<const sniff_ipv6_mobility*>(ipv6Payload(pkt, linkType));
     if (!mobility) return {};
 
     QStringList out;
@@ -788,11 +766,9 @@ QStringList Sniffing::parseIpv6Mobility(const u_char *pkt) const {
 }
 
 
-QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
+QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) const {
     QVector<PacketLayer> layers;
     ProtoField field;
-
-    const int linkType = Sniffing::linkType();
 
     if (linkType == DLT_LINUX_SLL) {
         const auto cooked = cookedHdr(pkt);
@@ -845,11 +821,11 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         layers.append(ethLayer);
     }
 
-    uint16_t et = ethType(pkt);
+    uint16_t et = ethType(pkt, linkType);
 
     // --- IPv4 ---
     if (et == ETHERTYPE_IP) {
-        const auto ip = ipv4Hdr(pkt);
+        const auto ip = ipv4Hdr(pkt, linkType);
         PacketLayer ipLayer;
         ipLayer.name = "Internet Protocol Version 4";
 
@@ -870,7 +846,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
 
         // --- TCP ---
         if (ip->ip_p == IPPROTO_TCP) {
-            auto vals = parseTcp(pkt);
+            auto vals = parseTcp(pkt, linkType);
             static const QStringList labels = {
                 "Sender IP","Target IP","Source port","Destination port",
                 "Sequence number","ACK number","TCP header length","Flags",
@@ -904,7 +880,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- UDP ---
         else if (ip->ip_p == IPPROTO_UDP) {
-            auto vals = parseUdp(pkt);
+            auto vals = parseUdp(pkt, linkType);
             static const QStringList labels = {
                 "Sender IP","Target IP","Source port","Destination port",
                 "Length","Checksum"
@@ -921,7 +897,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- ICMPv4 ---
         else if (ip->ip_p == IPPROTO_ICMP) {
-            auto vals = parseIcmp(pkt);
+            auto vals = parseIcmp(pkt, linkType);
             static const QStringList labels = {
                 "ICMPv4 Type","Code","Checksum","Identifier",
                 "Sequence","Message"
@@ -938,7 +914,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IGMP ---
         else if (ip->ip_p == IPPROTO_IGMP) {
-            auto vals = parseIgmp(pkt);
+            auto vals = parseIgmp(pkt, linkType);
             static const QStringList labels = {
                 "Type","Description","Max Response Time","Checksum","Group Address"
             };
@@ -954,7 +930,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- SCTP ---
         else if (ip->ip_p == IPPROTO_SCTP) {
-            auto vals = parseSctp(pkt);
+            auto vals = parseSctp(pkt, linkType);
             static const QStringList labels = {
                 "Source port","Destination port","Verification Tag","Checksum"
             };
@@ -970,7 +946,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- UDP-Lite ---
         else if (ip->ip_p == IPPROTO_UDPLITE) {
-            auto vals = parseUdplite(pkt);
+            auto vals = parseUdplite(pkt, linkType);
             static const QStringList labels = {
                 "Source port","Destination port","Checksum coverage","Checksum"
             };
@@ -986,7 +962,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- GRE ---
         else if (ip->ip_p == IPPROTO_GRE) {
-            auto vals = parseGre(pkt);
+            auto vals = parseGre(pkt, linkType);
             static const QStringList labels = {
                 "Flags","Version","Protocol"
             };
@@ -1002,7 +978,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IP-in-IP ---
         else if (ip->ip_p == IPPROTO_IPIP) {
-            auto vals = parseIpip(pkt);
+            auto vals = parseIpip(pkt, linkType);
             static const QStringList labels = {
                 "Inner Src","Inner Dst","Inner Protocol","Inner Length"
             };
@@ -1018,7 +994,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- OSPF ---
         else if (ip->ip_p == IPPROTO_OSPFIGP) {
-            auto vals = parseOspf(pkt);
+            auto vals = parseOspf(pkt, linkType);
             static const QStringList labels = {
                 "Version","Type","Length","Router ID","Area ID","Checksum","Auth Type"
             };
@@ -1034,7 +1010,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- RSVP ---
         else if (ip->ip_p == IPPROTO_RSVP) {
-            auto vals = parseRsvp(pkt);
+            auto vals = parseRsvp(pkt, linkType);
             static const QStringList labels = {
                 "Version","Message Type","Checksum","Send TTL","Length"
             };
@@ -1050,7 +1026,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- PIM ---
         else if (ip->ip_p == IPPROTO_PIM) {
-            auto vals = parsePim(pkt);
+            auto vals = parsePim(pkt, linkType);
             static const QStringList labels = {
                 "Version","Message Type","Checksum"
             };
@@ -1066,7 +1042,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- EGP ---
         else if (ip->ip_p == IPPROTO_EGP) {
-            auto vals = parseEgp(pkt);
+            auto vals = parseEgp(pkt, linkType);
             static const QStringList labels = {
                 "Version","Type","Code","Status","Checksum","AS Number","Sequence"
             };
@@ -1082,7 +1058,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPsec AH ---
         else if (ip->ip_p == IPPROTO_AH) {
-            auto vals = parseAh(pkt);
+            auto vals = parseAh(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Payload Length","SPI","Sequence Number"
             };
@@ -1098,7 +1074,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPsec ESP ---
         else if (ip->ip_p == IPPROTO_ESP) {
-            auto vals = parseEsp(pkt);
+            auto vals = parseEsp(pkt, linkType);
             static const QStringList labels = {
                 "SPI","Sequence Number"
             };
@@ -1114,7 +1090,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- MPLS-in-IP ---
         else if (ip->ip_p == IPPROTO_MPLS) {
-            auto vals = parseMpls(pkt);
+            auto vals = parseMpls(pkt, linkType);
             static const QStringList labels = {
                 "Label","Traffic Class","Bottom of Stack","TTL"
             };
@@ -1131,7 +1107,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
     }
     // --- IPv6 ---
     else if (et == ETHERTYPE_IPV6) {
-        const auto ip6 = ipv6Hdr(pkt);
+        const auto ip6 = ipv6Hdr(pkt, linkType);
         PacketLayer ip6Layer;
         ip6Layer.name = "Internet Protocol Version 6";
 
@@ -1157,7 +1133,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
 
         // --- TCP ---
         if (ip6->ip6_nxt == IPPROTO_TCP) {
-            auto vals = parseTcp(pkt);
+            auto vals = parseTcp(pkt, linkType);
             static const QStringList labels = {
                 "Sender IP","Target IP","Source port","Destination port",
                 "Sequence number","ACK number","TCP header length","Flags",
@@ -1177,7 +1153,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- UDP ---
         else if (ip6->ip6_nxt == IPPROTO_UDP) {
-            auto vals = parseUdp(pkt);
+            auto vals = parseUdp(pkt, linkType);
             static const QStringList labels = {
                 "Sender IP","Target IP","Source port","Destination port",
                 "Length","Checksum"
@@ -1194,7 +1170,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- ICMPv6 ---
         else if (ip6->ip6_nxt == IPPROTO_ICMPV6) {
-            auto vals = parseIcmpv6(pkt);
+            auto vals = parseIcmpv6(pkt, linkType);
             static const QStringList labels = {
                 "ICMPv6 Type","Code","Checksum","Identifier","Sequence","Message"
             };
@@ -1210,7 +1186,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- SCTP ---
         else if (ip6->ip6_nxt == IPPROTO_SCTP) {
-            auto vals = parseSctp(pkt);
+            auto vals = parseSctp(pkt, linkType);
             static const QStringList labels = {
                 "Source port","Destination port","Verification Tag","Checksum"
             };
@@ -1226,7 +1202,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- UDP-Lite ---
         else if (ip6->ip6_nxt == IPPROTO_UDPLITE) {
-            auto vals = parseUdplite(pkt);
+            auto vals = parseUdplite(pkt, linkType);
             static const QStringList labels = {
                 "Source port","Destination port","Checksum coverage","Checksum"
             };
@@ -1242,7 +1218,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- GRE ---
         else if (ip6->ip6_nxt == IPPROTO_GRE) {
-            auto vals = parseGre(pkt);
+            auto vals = parseGre(pkt, linkType);
             static const QStringList labels = {
                 "Flags","Version","Protocol"
             };
@@ -1258,7 +1234,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- RSVP ---
         else if (ip6->ip6_nxt == IPPROTO_RSVP) {
-            auto vals = parseRsvp(pkt);
+            auto vals = parseRsvp(pkt, linkType);
             static const QStringList labels = {
                 "Version","Message Type","Checksum","Send TTL","Length"
             };
@@ -1274,7 +1250,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- PIM ---
         else if (ip6->ip6_nxt == IPPROTO_PIM) {
-            auto vals = parsePim(pkt);
+            auto vals = parsePim(pkt, linkType);
             static const QStringList labels = {
                 "Version","Message Type","Checksum"
             };
@@ -1290,7 +1266,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPsec AH ---
         else if (ip6->ip6_nxt == IPPROTO_AH) {
-            auto vals = parseAh(pkt);
+            auto vals = parseAh(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Payload Length","SPI","Sequence Number"
             };
@@ -1306,7 +1282,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPsec ESP ---
         else if (ip6->ip6_nxt == IPPROTO_ESP) {
-            auto vals = parseEsp(pkt);
+            auto vals = parseEsp(pkt, linkType);
             static const QStringList labels = {
                 "SPI","Sequence Number"
             };
@@ -1322,7 +1298,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- MPLS-in-IP ---
         else if (ip6->ip6_nxt == IPPROTO_MPLS) {
-            auto vals = parseMpls(pkt);
+            auto vals = parseMpls(pkt, linkType);
             static const QStringList labels = {
                 "Label","Traffic Class","Bottom of Stack","TTL"
             };
@@ -1338,7 +1314,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPv6 Hop-by-Hop Options ---
         else if (ip6->ip6_nxt == IPPROTO_HOPOPTS) {
-            auto vals = parseIpv6HopByHop(pkt);
+            auto vals = parseIpv6HopByHop(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Next Header Name","Header Length"
             };
@@ -1354,7 +1330,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPv6 Routing Header ---
         else if (ip6->ip6_nxt == IPPROTO_ROUTING) {
-            auto vals = parseIpv6Routing(pkt);
+            auto vals = parseIpv6Routing(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Next Header Name","Routing Type","Segments Left"
             };
@@ -1370,7 +1346,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPv6 Fragment Header ---
         else if (ip6->ip6_nxt == IPPROTO_FRAGMENT) {
-            auto vals = parseIpv6Fragment(pkt);
+            auto vals = parseIpv6Fragment(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Next Header Name","Offset","More Fragments","Identification"
             };
@@ -1386,7 +1362,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPv6 Destination Options ---
         else if (ip6->ip6_nxt == IPPROTO_DSTOPTS) {
-            auto vals = parseIpv6Destination(pkt);
+            auto vals = parseIpv6Destination(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Next Header Name","Header Length"
             };
@@ -1402,7 +1378,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
         }
         // --- IPv6 Mobility Header ---
         else if (ip6->ip6_nxt == IPPROTO_MH) {
-            auto vals = parseIpv6Mobility(pkt);
+            auto vals = parseIpv6Mobility(pkt, linkType);
             static const QStringList labels = {
                 "Next Header","Next Header Name","Mobility Type","Checksum"
             };
@@ -1419,7 +1395,7 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
     }
     // --- ARP ---
     else if (et == ETHERTYPE_ARP) {
-        auto vals = parseArp(pkt);
+        auto vals = parseArp(pkt, linkType);
         static const QStringList labels = {
             "Sender IP","Target IP",
             "HW Type","Proto Type","HLEN","PLEN","Operation",
@@ -1442,19 +1418,44 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt) const {
 
 
 void Sniffing::saveToPcap(const QString &filePath) {
-    pcap_t *pcap = pcap_open_dead(Sniffing::linkType(), 65535);
-    pcap_dumper_t *dumper = pcap_dump_open(pcap, filePath.toUtf8().constData());
-
-    timeval ts;
-    ts.tv_sec = 0; ts.tv_usec = 0;
-
     QMutexLocker locker(&packetMutex);
-    for (const QByteArray &raw : packetBuffer) {
+    if (packetBuffer.isEmpty())
+        return;
+
+    QSet<int> linkTypes;
+    for (const auto &packet : packetBuffer)
+        linkTypes.insert(packet.linkType);
+
+    if (linkTypes.size() > 1) {
+        qWarning("Cannot save PCAP: captured packets use multiple link types.");
+        return;
+    }
+
+    const int linkType = *linkTypes.begin();
+
+    pcap_t *pcap = pcap_open_dead(linkType, 65535);
+    if (!pcap) {
+        qWarning("Failed to initialize PCAP writer.");
+        return;
+    }
+
+    pcap_dumper_t *dumper = pcap_dump_open(pcap, filePath.toUtf8().constData());
+    if (!dumper) {
+        qWarning("Failed to open PCAP file for writing: %s", pcap_geterr(pcap));
+        pcap_close(pcap);
+        return;
+    }
+
+    timeval ts{0, 0};
+
+    for (const auto &packet : packetBuffer) {
+        const QByteArray &raw = packet.data;
         pcap_pkthdr hdr;
         hdr.ts = ts;
         hdr.caplen = raw.size();
         hdr.len = raw.size();
-        pcap_dump((u_char*)dumper, &hdr, (const u_char*)raw.constData());
+        pcap_dump(reinterpret_cast<u_char*>(dumper), &hdr,
+                  reinterpret_cast<const u_char*>(raw.constData()));
     }
 
     pcap_dump_close(dumper);
@@ -1469,8 +1470,6 @@ void Sniffing::openFromPcap(const QString &filePath) {
         return;
     }
 
-    Sniffing::setLinkLayer(pcap_datalink(handle));
-
     const u_char *raw;
     struct pcap_pkthdr *header;
 
@@ -1479,11 +1478,13 @@ void Sniffing::openFromPcap(const QString &filePath) {
         packetBuffer.clear();
     }
 
+    const int linkType = pcap_datalink(handle);
+
     while (true) {
         int res = pcap_next_ex(handle, &header, &raw);
         if (res == 1) {
             QByteArray pkt(reinterpret_cast<const char*>(raw), header->caplen);
-            appendPacket(pkt);  
+            appendPacket(CapturedPacket{pkt, linkType});
         }
         else if (res == -2) {
             break;
@@ -1499,15 +1500,15 @@ void Sniffing::openFromPcap(const QString &filePath) {
 
 
 // here are my sniffing infos
-QVector<QByteArray> Sniffing::packetBuffer;
+QVector<CapturedPacket> Sniffing::packetBuffer;
 QMutex Sniffing::packetMutex;
 
-void Sniffing::appendPacket(const QByteArray &raw) {
+void Sniffing::appendPacket(const CapturedPacket &packet) {
     QMutexLocker locker(&packetMutex);
-    packetBuffer.append(raw);
+    packetBuffer.append(packet);
 }
 
-const QVector<QByteArray>& Sniffing::getAllPackets() {
+const QVector<CapturedPacket>& Sniffing::getAllPackets() {
     return packetBuffer;
 }
 

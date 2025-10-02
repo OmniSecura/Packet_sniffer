@@ -1,14 +1,28 @@
 #ifndef PACKETHELPERS_H
 #define PACKETHELPERS_H
 #include "protocols/proto_struct.h"
-#include "sniffing.h" 
 #include <QMap>
 #include <QVector>
 #include <QString>
 #include <arpa/inet.h>
 
-inline int linkHdrLen() {
-    return Sniffing::linkHeaderLength();
+#ifndef DLT_EN10MB
+#define DLT_EN10MB 1
+#endif
+#ifndef DLT_LINUX_SLL
+#define DLT_LINUX_SLL 113
+#endif
+#ifndef DLT_LINUX_SLL2
+#define DLT_LINUX_SLL2 276
+#endif
+
+inline int linkHdrLen(int linkType) {
+    switch (linkType) {
+        case DLT_LINUX_SLL:
+            return LINUX_SLL_HEADER_LEN;
+        default:
+            return SIZE_ETHERNET;
+    }
 }
 
 inline const sniff_linux_cooked* cookedHdr(const u_char* pkt) {
@@ -19,8 +33,8 @@ inline const sniff_linux_cooked* cookedHdr(const u_char* pkt) {
 inline const sniff_ethernet* ethHdr(const u_char* pkt) {
     return reinterpret_cast<const sniff_ethernet*>(pkt);
 }
-inline uint16_t ethType(const u_char* pkt) {
-    switch (Sniffing::linkType()) {
+inline uint16_t ethType(const u_char* pkt, int linkType) {
+    switch (linkType) {
         case DLT_LINUX_SLL:
             return ntohs(cookedHdr(pkt)->protocol);
         default:
@@ -29,67 +43,67 @@ inline uint16_t ethType(const u_char* pkt) {
 }
 
 // ARP
-inline const sniff_arp* arpHdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_arp*>(pkt + linkHdrLen());
+inline const sniff_arp* arpHdr(const u_char* pkt, int linkType) {
+    return reinterpret_cast<const sniff_arp*>(pkt + linkHdrLen(linkType));
 }
 
 // IPv4
-inline const sniff_ip* ipv4Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ip*>(pkt + linkHdrLen());
+inline const sniff_ip* ipv4Hdr(const u_char* pkt, int linkType) {
+    return reinterpret_cast<const sniff_ip*>(pkt + linkHdrLen(linkType));
 }
-inline int ipv4HdrLen(const u_char* pkt) {
-    const auto ip = ipv4Hdr(pkt);
+inline int ipv4HdrLen(const u_char* pkt, int linkType) {
+    const auto ip = ipv4Hdr(pkt, linkType);
     return IP_HL(ip) * 4;
 }
-inline const u_char* ipv4Payload(const u_char* pkt) {
-    return pkt + linkHdrLen() + ipv4HdrLen(pkt);
+inline const u_char* ipv4Payload(const u_char* pkt, int linkType) {
+    return pkt + linkHdrLen(linkType) + ipv4HdrLen(pkt, linkType);
 }
 
 // TCP
-inline const sniff_tcp* tcpHdr(const u_char* pkt) {
+inline const sniff_tcp* tcpHdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + linkHdrLen() + ipv4HdrLen(pkt)
+        pkt + linkHdrLen(linkType) + ipv4HdrLen(pkt, linkType)
     );
 }
 
 // UDP
-inline const sniff_udp* udpHdr(const u_char* pkt) {
+inline const sniff_udp* udpHdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + linkHdrLen() + ipv4HdrLen(pkt)
+        pkt + linkHdrLen(linkType) + ipv4HdrLen(pkt, linkType)
     );
 }
 
 // ICMP
-inline const sniff_icmp* icmpHdr(const u_char* pkt) {
+inline const sniff_icmp* icmpHdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_icmp*>(
-        pkt + linkHdrLen() + ipv4HdrLen(pkt)
+        pkt + linkHdrLen(linkType) + ipv4HdrLen(pkt, linkType)
     );
 }
 
 
 // IPv6
-inline const sniff_ipv6* ipv6Hdr(const u_char* pkt) {
-    return reinterpret_cast<const sniff_ipv6*>(pkt + linkHdrLen());
+inline const sniff_ipv6* ipv6Hdr(const u_char* pkt, int linkType) {
+    return reinterpret_cast<const sniff_ipv6*>(pkt + linkHdrLen(linkType));
 }
-inline const u_char* ipv6Payload(const u_char* pkt) {
-    return pkt + linkHdrLen() + sizeof(sniff_ipv6);
+inline const u_char* ipv6Payload(const u_char* pkt, int linkType) {
+    return pkt + linkHdrLen(linkType) + sizeof(sniff_ipv6);
 }
 
-inline const sniff_tcp* tcp6Hdr(const u_char* pkt) {
+inline const sniff_tcp* tcp6Hdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_tcp*>(
-        pkt + linkHdrLen() + sizeof(sniff_ipv6)
+        pkt + linkHdrLen(linkType) + sizeof(sniff_ipv6)
     );
 }
 
-inline const sniff_udp* udp6Hdr(const u_char* pkt) {
+inline const sniff_udp* udp6Hdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_udp*>(
-        pkt + linkHdrLen() + sizeof(sniff_ipv6)
+        pkt + linkHdrLen(linkType) + sizeof(sniff_ipv6)
     );
 }
 
-inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt) {
+inline const sniff_icmpv6* icmp6Hdr(const u_char* pkt, int linkType) {
     return reinterpret_cast<const sniff_icmpv6*>(
-        pkt + linkHdrLen() + sizeof(sniff_ipv6)
+        pkt + linkHdrLen(linkType) + sizeof(sniff_ipv6)
     );
 }
 // MAC → QString

@@ -29,11 +29,13 @@ void PacketWorker::process() {
         m_promisc
     ));
     if (!m_handle) {
-        emit newPacket({}, {QStringLiteral("ERROR: %1").arg(dev.error_buffer)});
+        emit newPacket({},
+                      {QStringLiteral("ERROR: %1").arg(dev.error_buffer)},
+                      m_linkType.load(std::memory_order_relaxed));
         return;
     }
 
-    Sniffing::setLinkLayer(pcap_datalink(m_handle.get()));
+    m_linkType.store(pcap_datalink(m_handle.get()), std::memory_order_relaxed);
 
     // 2) compile & set filter via Filters
     Filters flt;
