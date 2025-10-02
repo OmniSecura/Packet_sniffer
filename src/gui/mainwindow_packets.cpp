@@ -2,6 +2,14 @@
 #include "../packets/packethelpers.h"
 #include "../../protocols/proto_struct.h"
 #include "../PacketTableModel.h"
+#include "selectionannotationdialog.h"
+#include <algorithm>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QRegularExpression>
 
 // void MainWindow::onPacketClicked(int row, int /*col*/) { //QTableWidget before QTableView
 void MainWindow::onPacketClicked(const QModelIndex &index) {
@@ -133,9 +141,79 @@ void MainWindow::startNewSession(){
     packetCountLabel->setText("Packets: 0");
     sessionStartTime = QDateTime::currentDateTime();
     updateSessionTime();
+    annotations.clear();
 }
 
-void MainWindow::onPacketTableContextMenu(const QPoint &pos) 
+void MainWindow::saveAnnotationToFile(const PacketAnnotation &annotation)
+{
+    QDir baseDir(QDir::currentPath());
+    const QString folderName = QStringLiteral("reporting");
+    if (!baseDir.exists(folderName))
+        baseDir.mkpath(folderName);
+
+    if (!baseDir.cd(folderName))
+        return;
+
+    QDateTime timestamp = annotation.createdAt.isValid()
+        ? annotation.createdAt
+        : QDateTime::currentDateTime();
+
+    QString baseName = annotation.title.trimmed();
+    if (baseName.isEmpty())
+        baseName = timestamp.toString(QStringLiteral("yyyyMMdd_HHmmss"));
+
+    baseName.replace(' ', '_');
+    static const QRegularExpression invalidChars(QStringLiteral("[^A-Za-z0-9_\-]"));
+    baseName.replace(invalidChars, QStringLiteral("_"));
+    if (baseName.isEmpty())
+        baseName = QStringLiteral("report_%1").arg(timestamp.toString(QStringLiteral("yyyyMMdd_HHmmss")));
+
+    const QString filePath = baseDir.filePath(baseName + QStringLiteral(".json"));
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+
+    QJsonObject root;
+    root.insert(QStringLiteral("title"), annotation.title);
+    root.insert(QStringLiteral("description"), annotation.description);
+    root.insert(QStringLiteral("threatLevel"), annotation.threatLevel);
+    root.insert(QStringLiteral("recommendedAction"), annotation.recommendedAction);
+    root.insert(QStringLiteral("createdAt"), timestamp.toString(Qt::ISODate));
+
+    QJsonArray tagArray;
+    for (const QString &tag : annotation.tags)
+        tagArray.append(tag);
+    root.insert(QStringLiteral("tags"), tagArray);
+
+    QJsonArray packetArray;
+    for (const PacketAnnotationItem &item : annotation.packets) {
+        QJsonObject packetObject;
+        packetObject.insert(QStringLiteral("row"), item.row);
+
+        QJsonArray packetTags;
+        for (const QString &tag : item.tags)
+            packetTags.append(tag);
+        packetObject.insert(QStringLiteral("tags"), packetTags);
+
+        if (item.color.isValid())
+            packetObject.insert(QStringLiteral("color"), item.color.name(QColor::HexArgb));
+
+        PacketTableRow rowData = packetModel->row(item.row);
+        packetObject.insert(QStringLiteral("number"), rowData.columns.value(PacketColumns::ColumnNumber));
+        packetObject.insert(QStringLiteral("time"), rowData.columns.value(PacketColumns::ColumnTime));
+        packetObject.insert(QStringLiteral("source"), rowData.columns.value(PacketColumns::ColumnSource));
+        packetObject.insert(QStringLiteral("destination"), rowData.columns.value(PacketColumns::ColumnDestination));
+        packetObject.insert(QStringLiteral("protocol"), rowData.columns.value(PacketColumns::ColumnProtocol));
+        packetObject.insert(QStringLiteral("info"), rowData.columns.value(PacketColumns::ColumnInfo));
+
+        packetArray.append(packetObject);
+    }
+    root.insert(QStringLiteral("packets"), packetArray);
+
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+void MainWindow::onPacketTableContextMenu(const QPoint &pos)
 {
     QModelIndex index = packetTable->indexAt(pos);
     if (!index.isValid()) return;
@@ -162,7 +240,7 @@ void MainWindow::onPacketTableContextMenu(const QPoint &pos)
     protoList.removeDuplicates();
 
     QMenu menu(this);
-    QAction *reportAct = menu.addAction(tr("Report"));
+    QAction *reportAct = menu.addAction(tr("Reporting…"));
     QMenu *filterMenu = menu.addMenu(tr("Filter…"));
     QAction *srcAct   = filterMenu->addAction(tr("Source Host"));
     QAction *dstAct   = filterMenu->addAction(tr("Destination Host"));
@@ -172,7 +250,55 @@ void MainWindow::onPacketTableContextMenu(const QPoint &pos)
     if (!chosen) return;
 
     if (chosen == reportAct) {
-        QMessageBox::information(this, tr("Report"), tr("Reporting not implemented yet."));
+        QVector<SelectionAnnotationDialog::PacketSummary> packetSummaries;
+        packetSummaries.reserve(rows.size());
+        for (int r : rows) {
+            PacketTableRow rowData = packetModel->row(r);
+            SelectionAnnotationDialog::PacketSummary summary;
+            summary.row = r;
+            summary.number = rowData.columns.value(PacketColumns::ColumnNumber);
+            summary.time = rowData.columns.value(PacketColumns::ColumnTime);
+            summary.source = rowData.columns.value(PacketColumns::ColumnSource);
+            summary.destination = rowData.columns.value(PacketColumns::ColumnDestination);
+            summary.protocol = rowData.columns.value(PacketColumns::ColumnProtocol);
+            summary.info = rowData.columns.value(PacketColumns::ColumnInfo);
+            packetSummaries.append(summary);
+        }
+
+        SelectionAnnotationDialog dlg(packetSummaries, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            SelectionAnnotationDialog::Result dialogResult = dlg.result();
+            PacketAnnotation annotation;
+            annotation.title = dialogResult.title;
+            annotation.description = dialogResult.description;
+            annotation.tags = dialogResult.tags;
+            annotation.threatLevel = dialogResult.threatLevel;
+            annotation.recommendedAction = dialogResult.recommendedAction;
+            annotation.createdAt = QDateTime::currentDateTime();
+
+            QVector<PacketAnnotationItem> packetItems;
+            packetItems.reserve(dialogResult.packets.size());
+            for (const auto &packetResult : dialogResult.packets) {
+                PacketAnnotationItem item;
+                item.row = packetResult.row;
+                item.tags = packetResult.tags;
+                item.color = packetResult.color;
+                packetItems.append(item);
+                packetModel->setRowBackground(item.row, item.color);
+            }
+            annotation.packets = packetItems;
+
+            annotations.append(annotation);
+            saveAnnotationToFile(annotation);
+
+            const QString titleText = annotation.title.isEmpty()
+                ? tr("selection report")
+                : QStringLiteral("'%1'").arg(annotation.title);
+            statusBar()->showMessage(tr("Saved reporting for %1 packets as %2")
+                                         .arg(annotation.packets.size())
+                                         .arg(titleText),
+                                     6000);
+        }
     } else if (chosen == srcAct) {
         QStringList parts;
         for (const QString &s : srcList)
