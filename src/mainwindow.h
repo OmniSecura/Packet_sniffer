@@ -26,6 +26,9 @@
 #include <QLabel>
 #include <QTimer>
 #include <QMap>
+#include <QDateTime>
+#include <QVector>
+#include <QStringList>
 #include <memory>
 #include <arpa/inet.h>
 #include <pcap.h>
@@ -43,6 +46,22 @@
 #include "packets/packet_geolocation/GeoMap.h"
 #include "packets/packet_geolocation/CountryMapping/CountryMap.h"
 #include "PacketTableModel.h"
+
+struct PacketAnnotationItem {
+    int row = -1;
+    QStringList tags;
+    QColor color;
+};
+
+struct PacketAnnotation {
+    QString title;
+    QString description;
+    QStringList tags;
+    QString threatLevel;
+    QString recommendedAction;
+    QVector<PacketAnnotationItem> packets;
+    QDateTime createdAt;
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -71,7 +90,8 @@ private:
     void listInterfaces();
     QStringList infoColumn(const QStringList &summary, const u_char *pkt);
     void addLayerToTree(QTreeWidget *tree, const PacketLayer &lay);
-    
+    void saveAnnotationToFile(const PacketAnnotation &annotation);
+
     PacketColorizer packetColorizer;
 
     QComboBox   *ifaceBox;
@@ -106,13 +126,15 @@ private:
     QMap<QString,int>   protocolCounts;
 
     //charts
-    PieChart     *pieChart;   
+    PieChart     *pieChart;
     std::unique_ptr<Statistics> stats;
     QTimer *statsTimer = nullptr;
 
     //geolocation
     GeoLocation geo;
-    GeoMapWidget *mapWidget = nullptr;  
+    GeoMapWidget *mapWidget = nullptr;
+
+    QVector<PacketAnnotation> annotations;
 };
 
 #endif // MAINWINDOW_H
