@@ -39,6 +39,7 @@ public:
     void addPacket(const PacketTableRow &row);
     PacketTableRow row(int index) const;
     void clear();
+    void setRowBackground(int index, const QColor &color);
 
 private:
     QVector<PacketTableRow> m_rows;
