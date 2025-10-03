@@ -61,6 +61,8 @@ private:
     };
 
     QHash<FlowKey, FlowStats> m_flowStats;
+
+    friend uint qHash(const FlowKey &key, uint seed) noexcept;
 };
 
 inline uint qHash(const Statistics::FlowKey &key, uint seed = 0) noexcept
