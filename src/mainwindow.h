@@ -89,6 +89,11 @@ private slots:
     void showOtherThemesDialog();
     void openPreferences();
     void openSessionManager();
+    void followSelectedStream();
+    void showPayloadOnlyDialog();
+    void showConversationSummary();
+    void highlightConversationPackets();
+    void resetPacketHighlights();
 
 private:
     void setupUI();
@@ -145,6 +150,25 @@ private:
     QVector<PacketAnnotation> annotations;
 
     AppSettings appSettings;
+
+    struct FlowTuple {
+        bool valid = false;
+        QString srcAddr;
+        QString dstAddr;
+        quint16 srcPort = 0;
+        quint16 dstPort = 0;
+        QString protocol;
+        bool ipv6 = false;
+        bool hasPorts = false;
+        quint8 ipProto = 0;
+    };
+
+    FlowTuple flowTupleFromPacket(const PacketTableRow &row) const;
+    int flowDirection(const FlowTuple &base, const FlowTuple &candidate) const;
+    QString formatEndpoint(const QString &addr, quint16 port, bool includePort) const;
+    QString conversationFilter(const FlowTuple &flow) const;
+    QByteArray extractPayload(const PacketTableRow &row) const;
+    QString printablePayload(const QByteArray &payload) const;
 };
 
 #endif // MAINWINDOW_H
