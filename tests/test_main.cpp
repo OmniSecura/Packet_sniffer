@@ -1,5 +1,7 @@
 #include <QTest>
 
+QTEST_SET_MAIN_SOURCE_PATH
+
 #include "tst_sniffing.h"
 #include "tst_appsettings.h"
 

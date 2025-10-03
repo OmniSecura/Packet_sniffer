@@ -4,6 +4,7 @@
 #include "../PacketTableModel.h"
 #include "../statistics/geooverviewdialog.h"
 #include "preferencesdialog.h"
+#include "followstreamdialog.h"
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QMenu>
@@ -173,8 +174,7 @@ void MainWindow::setupUI() {
     captureMenu->addAction("Stop",  stopBtn,  &QPushButton::click);
 
     auto *analyzeMenu = menuBar->addMenu("Analyze");
-    analyzeMenu->addAction("Follow Stream", this, [](){
-      QMessageBox::information(nullptr,"Analyze","…"); });
+    analyzeMenu->addAction("Follow Stream", this, &MainWindow::openFollowStreamDialog);
     showPayloadOnlyAction = analyzeMenu->addAction("Show Payload Only");
     showPayloadOnlyAction->setCheckable(true);
     connect(showPayloadOnlyAction, &QAction::toggled,
@@ -317,6 +317,12 @@ void MainWindow::openPreferences() {
             QTimer::singleShot(0, startBtn, &QPushButton::click);
         }
     }
+}
+
+void MainWindow::openFollowStreamDialog() {
+    FollowStreamDialog dlg(&parser, this);
+    dlg.setStreams(parser.getStreamConversations());
+    dlg.exec();
 }
 
 void MainWindow::showOtherThemesDialog() {

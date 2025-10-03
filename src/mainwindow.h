@@ -92,6 +92,7 @@ private slots:
     void openSessionManager();
     void togglePayloadOnlyMode(bool enabled);
     void onPayloadDecodeChanged(int index);
+    void openFollowStreamDialog();
 
 private:
     void setupUI();
