@@ -3,6 +3,7 @@
 #include "coloring/packetcolorizer.h"
 #include "theme/theme.h"
 #include "gui/mainwindow_ui.h"
+#include "gui/followstreamdialog.h"
 #include "statistics/sessionmanagerdialog.h"
 
 #include <QComboBox>

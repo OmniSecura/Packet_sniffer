@@ -15,6 +15,7 @@ private slots:
     void parseHttpRequest();
     void parseDnsQuery();
     void parseTlsClientHello();
+    void reconstructTcpStreamFromPcap();
 };
 
 #endif // TST_SNIFFING_H
