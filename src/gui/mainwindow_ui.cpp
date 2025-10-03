@@ -149,11 +149,12 @@ void MainWindow::setupUI() {
     captureMenu->addAction("Stop",  stopBtn,  &QPushButton::click);
 
     auto *analyzeMenu = menuBar->addMenu("Analyze");
-    analyzeMenu->addAction("Follow Stream", this, [](){
-      QMessageBox::information(nullptr,"Analyze","…"); });
-    analyzeMenu->addAction("Show Payload Only", this, []() {
-        QMessageBox::information(nullptr, "Analyze", "Payload filter view coming soon.");
-    });
+    analyzeMenu->addAction("Follow Stream", this, &MainWindow::followSelectedStream);
+    analyzeMenu->addAction("Show Payload Only", this, &MainWindow::showPayloadOnlyDialog);
+    analyzeMenu->addAction("Conversation Summary", this, &MainWindow::showConversationSummary);
+    analyzeMenu->addAction("Highlight Conversation Packets", this, &MainWindow::highlightConversationPackets);
+    analyzeMenu->addSeparator();
+    analyzeMenu->addAction("Reset Manual Highlights", this, &MainWindow::resetPacketHighlights);
     auto *statsMenu = menuBar->addMenu("Statistics");
     statsMenu->addAction("Summary", this, [this]() {
         StatsDialog dlg(this);

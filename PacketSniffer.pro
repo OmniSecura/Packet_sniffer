@@ -17,6 +17,7 @@ SOURCES += \
     src/theme/theme.cpp \
     src/theme/otherthemesdialog.cpp \
     src/gui/mainwindow_ui.cpp \
+    src/gui/mainwindow_analyze.cpp \
     src/gui/mainwindow_sniffing.cpp \
     src/gui/mainwindow_packets.cpp \
     src/gui/selectionannotationdialog.cpp \
