@@ -166,3 +166,64 @@ bool MainWindow::loadOfflineSession(const SessionStorage::LoadedSession &session
 
     return true;
 }
+
+void MainWindow::applyFlowFilter(const QString &protocol,
+                                 const QString &srcAddr,
+                                 quint16 srcPort,
+                                 const QString &dstAddr,
+                                 quint16 dstPort)
+{
+    FlowFilterCriteria criteria;
+    criteria.protocol = protocol;
+    criteria.srcAddress = srcAddr;
+    criteria.srcPort = srcPort;
+    criteria.dstAddress = dstAddr;
+    criteria.dstPort = dstPort;
+    m_activeFlowFilter = criteria;
+    refreshFlowFilter();
+}
+
+void MainWindow::clearFlowFilter()
+{
+    if ((!packetTable || !packetModel)) {
+        m_activeFlowFilter.reset();
+        return;
+    }
+
+    if (!m_activeFlowFilter.has_value()) {
+        // ensure table rows are visible even if no filter was active
+        for (int row = 0; row < packetModel->rowCount(); ++row)
+            packetTable->setRowHidden(row, false);
+        return;
+    }
+
+    m_activeFlowFilter.reset();
+    for (int row = 0; row < packetModel->rowCount(); ++row)
+        packetTable->setRowHidden(row, false);
+}
+
+bool MainWindow::matchesFlowFilter(const PacketTableRow &row) const
+{
+    if (!m_activeFlowFilter.has_value()) {
+        return true;
+    }
+
+    const auto &criteria = *m_activeFlowFilter;
+    return row.protocol == criteria.protocol
+        && row.srcAddress == criteria.srcAddress
+        && row.dstAddress == criteria.dstAddress
+        && row.srcPort == criteria.srcPort
+        && row.dstPort == criteria.dstPort;
+}
+
+void MainWindow::refreshFlowFilter()
+{
+    if (!packetTable || !packetModel)
+        return;
+
+    for (int row = 0; row < packetModel->rowCount(); ++row) {
+        const PacketTableRow rowData = packetModel->row(row);
+        const bool visible = matchesFlowFilter(rowData);
+        packetTable->setRowHidden(row, !visible);
+    }
+}

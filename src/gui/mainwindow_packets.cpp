@@ -248,6 +248,7 @@ void MainWindow::startNewSession(){
     parser.clearBuffer();
     // packetTable->setRowCount(0); //QTableWidget before QTableView
     packetModel->clear();
+    clearFlowFilter();
     detailsTree->clear();
     hexEdit->clear();
     protocolCombo->clear();

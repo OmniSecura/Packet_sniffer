@@ -2,6 +2,7 @@
 #include "../PacketTableModel.h"
 
 #include <pcap.h>
+#include <QtGlobal>
 
 void MainWindow::startSniffing() {
     startBtn->setEnabled(false);
@@ -125,6 +126,39 @@ void MainWindow::handlePacket(const QByteArray &raw,
                  << parts.value(2)
                  << parts.value(3);
 
+    const QString src = parts.value(0);
+    const QString dst = parts.value(1);
+    const QString proto = parts.value(2);
+
+    quint16 srcPort = 0;
+    quint16 dstPort = 0;
+    auto extractPorts = [&](const QStringList &values, int srcIndex, int dstIndex) {
+        if (values.size() > qMax(srcIndex, dstIndex)) {
+            bool ok = false;
+            quint16 parsed = values.at(srcIndex).toUShort(&ok);
+            srcPort = ok ? parsed : 0;
+            ok = false;
+            parsed = values.at(dstIndex).toUShort(&ok);
+            dstPort = ok ? parsed : 0;
+        }
+    };
+
+    if (proto == QLatin1String("TCP")) {
+        extractPorts(parser.parseTcp(pkt, linkType), 2, 3);
+    } else if (proto == QLatin1String("UDP")) {
+        extractPorts(parser.parseUdp(pkt, linkType), 2, 3);
+    } else if (proto == QLatin1String("SCTP")) {
+        extractPorts(parser.parseSctp(pkt, linkType), 2, 3);
+    } else if (proto == QLatin1String("UDPLITE")) {
+        extractPorts(parser.parseUdplite(pkt, linkType), 2, 3);
+    }
+
+    tableRow.protocol = proto;
+    tableRow.srcAddress = src;
+    tableRow.dstAddress = dst;
+    tableRow.srcPort = srcPort;
+    tableRow.dstPort = dstPort;
+
     QStringList infoValues = infoColumn(parts, pkt, linkType);
 
     // auto *infoItem = new QTableWidgetItem(infoValues.join("  "));
@@ -152,8 +186,6 @@ void MainWindow::handlePacket(const QByteArray &raw,
         QString("Packets: %1").arg(packetCount)
     );
 
-    QString proto = parts.value(2); 
-
     protocolCounts[proto] += 1;
     //qint64 elapsed = sessionStartTime.secsTo(QDateTime::currentDateTime());
     //int sec = static_cast<int>(elapsed);
@@ -161,12 +193,15 @@ void MainWindow::handlePacket(const QByteArray &raw,
     //statsConnectionsPerSecond[sec].insert(qMakePair(parts.value(0), parts.value(1)))
     //statsPacketsPerSecond[sec]++;
     //statsBytesPerSecond[sec] += raw.size();
-    QString src       = parts.value(0);  
-    QString dst       = parts.value(1);  
     quint64 pktSize   = static_cast<quint64>(raw.size());
 
     if (stats) {
-        stats->recordPacket(pktTime, proto, src, dst, pktSize);
+        stats->recordPacket(pktTime, proto, src, srcPort, dst, dstPort, pktSize);
+    }
+
+    if (packetTable && m_activeFlowFilter.has_value()) {
+        bool visible = matchesFlowFilter(tableRow);
+        packetTable->setRowHidden(row, !visible);
     }
 
     updateProtocolCombo();
