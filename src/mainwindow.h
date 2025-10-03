@@ -30,6 +30,7 @@
 #include <QDateTime>
 #include <QVector>
 #include <QStringList>
+#include <optional>
 #include <memory>
 #include <arpa/inet.h>
 #include <pcap.h>
@@ -89,6 +90,12 @@ private slots:
     void showOtherThemesDialog();
     void openPreferences();
     void openSessionManager();
+    void applyFlowFilter(const QString &protocol,
+                         const QString &srcAddr,
+                         quint16 srcPort,
+                         const QString &dstAddr,
+                         quint16 dstPort);
+    void clearFlowFilter();
 
 private:
     void setupUI();
@@ -145,6 +152,19 @@ private:
     QVector<PacketAnnotation> annotations;
 
     AppSettings appSettings;
+
+    struct FlowFilterCriteria {
+        QString protocol;
+        QString srcAddress;
+        quint16 srcPort = 0;
+        QString dstAddress;
+        quint16 dstPort = 0;
+    };
+
+    std::optional<FlowFilterCriteria> m_activeFlowFilter;
+
+    bool matchesFlowFilter(const PacketTableRow &row) const;
+    void refreshFlowFilter();
 };
 
 #endif // MAINWINDOW_H

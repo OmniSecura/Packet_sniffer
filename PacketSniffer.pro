@@ -25,6 +25,7 @@ SOURCES += \
     src/statistics/statsdialog.cpp \
     src/statistics/sessionmanagerdialog.cpp \
     src/statistics/sessionstorage.cpp \
+    src/statistics/FlowTableModel.cpp \
     src/statistics/charts/barChart.cpp \
     src/statistics/charts/lineChart.cpp \
     src/statistics/charts/pieChart.cpp \
@@ -57,6 +58,7 @@ HEADERS += \
     src/statistics/statsdialog.h \
     src/statistics/sessionmanagerdialog.h \
     src/statistics/sessionstorage.h \
+    src/statistics/FlowTableModel.h \
     src/statistics/charts/barChart.h \
     src/statistics/charts/lineChart.h \
     src/statistics/charts/pieChart.h \

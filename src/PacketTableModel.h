@@ -6,6 +6,7 @@
 #include <QByteArray>
 #include <QStringList>
 #include <QVector>
+#include <QtGlobal>
 
 #ifndef DLT_EN10MB
 #define DLT_EN10MB 1
@@ -16,6 +17,12 @@ struct PacketTableRow {
     QByteArray rawData;  // packet raw bytes
     QColor background;   // background color
     int linkType = DLT_EN10MB;
+
+    QString protocol;        // cached for flow filtering/statistics
+    QString srcAddress;
+    QString dstAddress;
+    quint16 srcPort = 0;
+    quint16 dstPort = 0;
 };
 
 

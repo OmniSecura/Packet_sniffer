@@ -22,6 +22,28 @@ QString baseNameFor(const QString &path)
     return info.completeBaseName();
 }
 
+QVector<SessionStorage::FlowRecord> parseFlows(const QJsonArray &array)
+{
+    QVector<SessionStorage::FlowRecord> flows;
+    flows.reserve(array.size());
+    for (const QJsonValue &value : array) {
+        const QJsonObject obj = value.toObject();
+        SessionStorage::FlowRecord rec;
+        rec.protocol = obj.value("protocol").toString();
+        rec.srcAddress = obj.value("srcAddress").toString();
+        rec.srcPort = static_cast<quint16>(obj.value("srcPort").toInt());
+        rec.dstAddress = obj.value("dstAddress").toString();
+        rec.dstPort = static_cast<quint16>(obj.value("dstPort").toInt());
+        rec.packets = static_cast<quint64>(obj.value("packets").toDouble());
+        rec.bytes = static_cast<quint64>(obj.value("bytes").toDouble());
+        rec.firstSeen = QDateTime::fromString(obj.value("firstSeen").toString(), Qt::ISODate);
+        rec.lastSeen = QDateTime::fromString(obj.value("lastSeen").toString(), Qt::ISODate);
+        rec.durationSeconds = static_cast<qint64>(obj.value("durationSeconds").toDouble());
+        flows.append(rec);
+    }
+    return flows;
+}
+
 }
 
 QString sessionsDirectory()
@@ -79,6 +101,7 @@ QVector<SessionRecord> listSessions()
         std::sort(protocolList.begin(), protocolList.end());
         record.protocols = protocolList;
         record.hasPcap = QFileInfo::exists(record.pcapPath);
+        record.flows = parseFlows(obj.value("flows").toArray());
         if (record.startTime.isValid() && record.endTime.isValid()) {
             record.displayName = QStringLiteral("%1 → %2")
                 .arg(record.startTime.toString(Qt::ISODate))
@@ -115,6 +138,9 @@ std::optional<LoadedSession> loadSession(const SessionRecord &record)
     if (session.statsDocument.isNull()) {
         return std::nullopt;
     }
+
+    const QJsonObject rootObj = session.statsDocument.object();
+    session.flows = parseFlows(rootObj.value("flows").toArray());
 
     Sniffing sniffer;
     sniffer.openFromPcap(record.pcapPath);

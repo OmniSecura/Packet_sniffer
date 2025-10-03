@@ -157,6 +157,10 @@ void MainWindow::setupUI() {
     auto *statsMenu = menuBar->addMenu("Statistics");
     statsMenu->addAction("Summary", this, [this]() {
         StatsDialog dlg(this);
+        connect(&dlg, &StatsDialog::flowSelected,
+                this, &MainWindow::applyFlowFilter);
+        connect(&dlg, &StatsDialog::flowSelectionCleared,
+                this, &MainWindow::clearFlowFilter);
         dlg.exec();
     });
     statsMenu->addAction("GeoOverview", this, [this]() {
