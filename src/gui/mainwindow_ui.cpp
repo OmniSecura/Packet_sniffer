@@ -9,6 +9,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QCoreApplication>
+#include <QList>
 
 void MainWindow::setupUI() {
     // === Central UI ===
@@ -31,11 +32,11 @@ void MainWindow::setupUI() {
     mainLayout->addLayout(topBar);
 
     // Packet table + details/hex splitter
-    auto *mainSplitter = new QSplitter(Qt::Horizontal);
+    mainSplitter = new QSplitter(Qt::Horizontal);
 
     // 1) Left Pane: Packets
     //PacketTable usage (TODO: swap QTableWidget to QTableView)
-    auto *leftSplitter = new QSplitter(Qt::Vertical);
+    leftSplitter = new QSplitter(Qt::Vertical);
     // packetTable = new QTableWidget;
     // packetTable->setColumnCount(7);
     // packetTable->setHorizontalHeaderLabels(
@@ -61,12 +62,12 @@ void MainWindow::setupUI() {
     const QString mapPath = QCoreApplication::applicationDirPath() + "/resources/WorldMap.svg";
     mapWidget = new GeoMapWidget(mapPath, this);
     mapWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    leftSplitter->addWidget(mapWidget); 
+    leftSplitter->addWidget(mapWidget);
 
     mainSplitter->addWidget(leftSplitter);
 
     // 2) Right pane
-    auto *rightSplitter = new QSplitter(Qt::Vertical);
+    rightSplitter = new QSplitter(Qt::Vertical);
 
     // 2a) Information tree
     detailsTree = new QTreeWidget;
@@ -77,10 +78,33 @@ void MainWindow::setupUI() {
     detailsTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     rightSplitter->addWidget(detailsTree);
 
-    // 2b) Hex view
-    hexEdit = new QTextEdit;
+    // 2b) Hex view & payload
+    payloadTabs = new QTabWidget;
+    payloadTabs->setDocumentMode(true);
+
+    hexEdit = new QPlainTextEdit;
     hexEdit->setReadOnly(true);
-    rightSplitter->addWidget(hexEdit);
+    payloadTabs->addTab(hexEdit, tr("Hex Dump"));
+
+    QWidget *payloadTab = new QWidget;
+    auto *payloadLayout = new QVBoxLayout(payloadTab);
+    payloadLayout->setContentsMargins(0, 0, 0, 0);
+    auto *payloadControls = new QHBoxLayout;
+    auto *decodeLabel = new QLabel(tr("Decode as:"));
+    payloadDecodeCombo = new QComboBox;
+    payloadDecodeCombo->addItem(tr("ASCII"));
+    payloadDecodeCombo->addItem(tr("Hex"));
+    payloadControls->addWidget(decodeLabel);
+    payloadControls->addWidget(payloadDecodeCombo);
+    payloadControls->addStretch();
+    payloadLayout->addLayout(payloadControls);
+
+    payloadView = new QPlainTextEdit;
+    payloadView->setReadOnly(true);
+    payloadLayout->addWidget(payloadView);
+
+    payloadTabs->addTab(payloadTab, tr("Payload"));
+    rightSplitter->addWidget(payloadTabs);
 
     // TOP5 Pie Chart
     pieChart = new PieChart;
@@ -95,7 +119,7 @@ void MainWindow::setupUI() {
     leftSplitter->setStretchFactor(0, 1); // packets
     leftSplitter->setStretchFactor(1, 4); // map
     rightSplitter->setStretchFactor(0, 3); // detailsTree
-    rightSplitter->setStretchFactor(1, 2); // hexEdit
+    rightSplitter->setStretchFactor(1, 2); // payloadTabs
     rightSplitter->setStretchFactor(2, 1); // pieChart
 
 
@@ -151,9 +175,10 @@ void MainWindow::setupUI() {
     auto *analyzeMenu = menuBar->addMenu("Analyze");
     analyzeMenu->addAction("Follow Stream", this, [](){
       QMessageBox::information(nullptr,"Analyze","…"); });
-    analyzeMenu->addAction("Show Payload Only", this, []() {
-        QMessageBox::information(nullptr, "Analyze", "Payload filter view coming soon.");
-    });
+    showPayloadOnlyAction = analyzeMenu->addAction("Show Payload Only");
+    showPayloadOnlyAction->setCheckable(true);
+    connect(showPayloadOnlyAction, &QAction::toggled,
+            this, &MainWindow::togglePayloadOnlyMode);
     auto *statsMenu = menuBar->addMenu("Statistics");
     statsMenu->addAction("Summary", this, [this]() {
         StatsDialog dlg(this);
@@ -227,6 +252,11 @@ void MainWindow::setupUI() {
     packetCount = 0;
     protocolCounts.clear();
     updateProtocolCombo();
+
+    connect(payloadDecodeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onPayloadDecodeChanged);
+
+    applyPayloadOnlyMode(payloadOnlyMode);
 }
 
 void MainWindow::listInterfaces() {
@@ -294,4 +324,46 @@ void MainWindow::showOtherThemesDialog() {
     if (dlg.exec() == QDialog::Accepted) {
         Theme::applyTheme(dlg.selectedTheme());
     }
+}
+
+void MainWindow::applyPayloadOnlyMode(bool enabled)
+{
+    if (packetTable) {
+        const QList<int> columnsToToggle = {
+            PacketColumns::ColumnSource,
+            PacketColumns::ColumnDestination,
+            PacketColumns::ColumnInfo
+        };
+        for (int column : columnsToToggle) {
+            packetTable->setColumnHidden(column, enabled);
+        }
+    }
+
+    if (mapWidget)
+        mapWidget->setVisible(!enabled);
+    if (detailsTree)
+        detailsTree->setVisible(!enabled);
+    if (pieChart)
+        pieChart->setVisible(!enabled);
+
+    if (payloadTabs) {
+        payloadTabs->setVisible(true);
+        if (enabled && payloadTabs->count() > 1)
+            payloadTabs->setCurrentIndex(1);
+    }
+}
+
+void MainWindow::togglePayloadOnlyMode(bool enabled)
+{
+    if (payloadOnlyMode == enabled)
+        return;
+
+    payloadOnlyMode = enabled;
+
+    if (showPayloadOnlyAction && showPayloadOnlyAction->isChecked() != enabled) {
+        QSignalBlocker blocker(showPayloadOnlyAction);
+        showPayloadOnlyAction->setChecked(enabled);
+    }
+
+    applyPayloadOnlyMode(enabled);
 }

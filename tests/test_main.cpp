@@ -2,6 +2,7 @@
 
 #include "tst_sniffing.h"
 #include "tst_appsettings.h"
+#include "tst_payloadformatter.h"
 
 int main(int argc, char **argv)
 {
@@ -15,6 +16,11 @@ int main(int argc, char **argv)
     {
         AppSettingsTest appSettings;
         status |= QTest::qExec(&appSettings, argc, argv);
+    }
+
+    {
+        PayloadFormatterTest formatter;
+        status |= QTest::qExec(&formatter, argc, argv);
     }
 
     return status;

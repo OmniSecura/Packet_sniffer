@@ -9,8 +9,9 @@
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTableView>
-#include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QThread>
 #include <QTreeWidget>
 #include <QHBoxLayout>
@@ -89,6 +90,8 @@ private slots:
     void showOtherThemesDialog();
     void openPreferences();
     void openSessionManager();
+    void togglePayloadOnlyMode(bool enabled);
+    void onPayloadDecodeChanged(int index);
 
 private:
     void setupUI();
@@ -109,10 +112,16 @@ private:
     QPushButton *stopBtn;
 
     // QTableWidget *packetTable; //QTableWidget before QTableView
+    QSplitter    *mainSplitter;
+    QSplitter    *leftSplitter;
+    QSplitter    *rightSplitter;
     QTableView   *packetTable;
     PacketTableModel *packetModel;
     QTreeWidget  *detailsTree;
-    QTextEdit    *hexEdit;
+    QTabWidget   *payloadTabs;
+    QPlainTextEdit *hexEdit;
+    QPlainTextEdit *payloadView;
+    QComboBox    *payloadDecodeCombo;
 
     QThread      *workerThread;
     PacketWorker *worker;
@@ -121,8 +130,9 @@ private:
     QAction *actionOpen = nullptr;
     QAction *actionSave = nullptr;
     QAction *newSession = nullptr;
-    QAction  *themeToggleAction; 
+    QAction  *themeToggleAction;
     QAction *otherThemesAction;
+    QAction *showPayloadOnlyAction = nullptr;
 
     // --- Status bar widgets ---
     QLabel   *packetCountLabel;
@@ -144,7 +154,13 @@ private:
 
     QVector<PacketAnnotation> annotations;
 
+    QByteArray currentPayload;
+    bool payloadOnlyMode = false;
+
     AppSettings appSettings;
+
+    void updatePayloadView();
+    void applyPayloadOnlyMode(bool enabled);
 };
 
 #endif // MAINWINDOW_H

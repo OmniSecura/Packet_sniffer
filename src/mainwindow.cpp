@@ -17,10 +17,16 @@ MainWindow::MainWindow(QWidget *parent)
       promiscBox(nullptr),
       startBtn(nullptr),
       stopBtn(nullptr),
+      mainSplitter(nullptr),
+      leftSplitter(nullptr),
+      rightSplitter(nullptr),
       packetTable(nullptr),
       packetModel(nullptr), //new for QTableView
       detailsTree(nullptr),
+      payloadTabs(nullptr),
       hexEdit(nullptr),
+      payloadView(nullptr),
+      payloadDecodeCombo(nullptr),
       workerThread(nullptr),
       worker(nullptr)
 {

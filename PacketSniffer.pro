@@ -19,6 +19,7 @@ SOURCES += \
     src/gui/mainwindow_ui.cpp \
     src/gui/mainwindow_sniffing.cpp \
     src/gui/mainwindow_packets.cpp \
+    src/gui/payloadformatter.cpp \
     src/gui/selectionannotationdialog.cpp \
     src/gui/preferencesdialog.cpp \
     src/statistics/geooverviewdialog.cpp \
@@ -50,6 +51,7 @@ HEADERS += \
     src/gui/mainwindow_ui.h \
     src/gui/mainwindow_sniffing.h \
     src/gui/mainwindow_packets.h \
+    src/gui/payloadformatter.h \
     src/gui/selectionannotationdialog.h \
     src/gui/preferencesdialog.h \
     src/statistics/geooverviewdialog.h \
