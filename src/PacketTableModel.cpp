@@ -1,5 +1,8 @@
 #include "PacketTableModel.h"
 
+#include "../packets/sniffing.h"
+#include "../packets/packethelpers.h"
+
 PacketTableModel::PacketTableModel(QObject *parent)
     : QAbstractTableModel(parent)
 {
@@ -57,6 +60,35 @@ void PacketTableModel::addPacket(const PacketTableRow &row)
 PacketTableRow PacketTableModel::row(int index) const
 {
     return m_rows.value(index);
+}
+
+QByteArray PacketTableModel::payloadForRow(int index) const
+{
+    if (index < 0 || index >= m_rows.size())
+        return {};
+
+    const PacketTableRow &r = m_rows.at(index);
+    if (r.rawData.isEmpty())
+        return {};
+
+    const QByteArray &raw = r.rawData;
+    const u_char *pkt = reinterpret_cast<const u_char*>(raw.constData());
+
+    int offset = linkHdrLen(r.linkType);
+    if (offset >= raw.size())
+        return {};
+
+    const uint16_t type = ethType(pkt, r.linkType);
+    if (type == ETHERTYPE_IP) {
+        offset += ipv4HdrLen(pkt, r.linkType);
+    } else if (type == ETHERTYPE_IPV6) {
+        offset += sizeof(sniff_ipv6);
+    }
+
+    if (offset < 0 || offset > raw.size())
+        return {};
+
+    return raw.mid(offset);
 }
 
 void PacketTableModel::clear()

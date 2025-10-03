@@ -1,4 +1,5 @@
 #include "mainwindow_packets.h"
+#include "payloadformatter.h"
 #include "../packets/packethelpers.h"
 #include "../../protocols/proto_struct.h"
 #include "../PacketTableModel.h"
@@ -69,18 +70,15 @@ void MainWindow::onPacketClicked(const QModelIndex &index) {
         mapWidget->highlightCountries(isoCodes);
 
     // --- Payload hex dump ---
-    const auto et = ethType(pkt, linkType);
-    const int iphdr = (et == ETHERTYPE_IP
-                       ? IP_HL(ipv4Hdr(pkt, linkType)) * 4
-                       : 0);
-    const int header_len = linkHdrLen(linkType) + iphdr;
-    const QByteArray payload = raw.mid(header_len);
+    const QByteArray payload = packetModel->payloadForRow(row);
     hexEdit->setPlainText(
         parser.toHexAscii(
             reinterpret_cast<const u_char*>(payload.constData()),
             payload.size()
         )
     );
+    currentPayload = payload;
+    updatePayloadView();
 }
 
 
@@ -250,6 +248,13 @@ void MainWindow::startNewSession(){
     packetModel->clear();
     detailsTree->clear();
     hexEdit->clear();
+    if (payloadTabs)
+        payloadTabs->setCurrentIndex(0);
+    if (payloadDecodeCombo)
+        payloadDecodeCombo->setCurrentIndex(0);
+    if (payloadView)
+        payloadView->clear();
+    currentPayload.clear();
     protocolCombo->clear();
     packetCount = 0;
     packetCountLabel->setText("Packets: 0");
@@ -325,6 +330,28 @@ void MainWindow::saveAnnotationToFile(const PacketAnnotation &annotation)
     root.insert(QStringLiteral("packets"), packetArray);
 
     file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+void MainWindow::onPayloadDecodeChanged(int)
+{
+    updatePayloadView();
+}
+
+void MainWindow::updatePayloadView()
+{
+    if (!payloadView)
+        return;
+
+    if (currentPayload.isEmpty()) {
+        payloadView->clear();
+        return;
+    }
+
+    const bool hexMode = payloadDecodeCombo && payloadDecodeCombo->currentIndex() == 1;
+    const QString text = hexMode
+        ? PayloadFormatter::toHex(currentPayload)
+        : PayloadFormatter::toAscii(currentPayload);
+    payloadView->setPlainText(text);
 }
 
 void MainWindow::onPacketTableContextMenu(const QPoint &pos)
