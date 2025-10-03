@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QMutex>
+#include <QHash>
 #include <QtGlobal>
 
 #ifndef DLT_EN10MB
@@ -100,6 +101,46 @@ public:
     Sniffing();
     ~Sniffing();
 
+    struct StreamEndpoint {
+        QString address;
+        quint16 port = 0;
+    };
+
+    struct StreamSegment {
+        qint64 timestampSeconds = 0;
+        qint64 timestampMicros = 0;
+        QByteArray payload;
+        bool fromAtoB = true;
+        int payloadLength = 0;
+        int frameLength = 0;
+        bool isTcp = false;
+        quint8 tcpFlags = 0;
+        quint32 sequenceNumber = 0;
+        quint32 acknowledgementNumber = 0;
+        quint16 windowSize = 0;
+    };
+
+    struct StreamConversation {
+        StreamEndpoint endpointA;
+        StreamEndpoint endpointB;
+        quint8 protocol = 0;
+        int ipVersion = 4;
+        bool initiatorIsA = true;
+        QVector<StreamSegment> segments;
+        QByteArray aggregatedAToB;
+        QByteArray aggregatedBToA;
+        qint64 totalBytesAToB = 0;
+        qint64 totalBytesBToA = 0;
+        int packetCount = 0;
+        qint64 firstTimestampSec = 0;
+        qint64 firstTimestampUsec = 0;
+        qint64 lastTimestampSec = 0;
+        qint64 lastTimestampUsec = 0;
+
+        QString protocolName() const;
+        QString label() const;
+    };
+
     static void packet_callback(u_char *args,
                                 const struct pcap_pkthdr *header,
                                 const u_char *packet);
@@ -136,6 +177,9 @@ public:
     QString toHexAscii(const u_char *payload, int len) const;
     QStringList packetSummary(const u_char *packet, int total_len, int linkType) const;
 
+    QVector<StreamConversation> getStreamConversations() const;
+    void resetStreams();
+
     //These are for saving and opening my pcap files
     void saveToPcap(const QString &filePath);
     void openFromPcap(const QString &filePath);
@@ -143,6 +187,13 @@ public:
     //I will use this to save my packet sniffing session later
     static QVector<CapturedPacket> packetBuffer;
     static QMutex packetMutex;
+    static QHash<QString, StreamConversation> streamConversations;
+    static QMutex streamMutex;
+    static void recordStreamSegment(const QByteArray &packet,
+                                    int linkType,
+                                    qint64 tsSec,
+                                    qint64 tsUsec);
+
     static void appendPacket(const CapturedPacket &packet);
     static const QVector<CapturedPacket>& getAllPackets();
     void clearBuffer();

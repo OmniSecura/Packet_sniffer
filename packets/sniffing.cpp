@@ -5,6 +5,8 @@
 #include <QMutexLocker>
 #include <linux/if_packet.h>
 #include <QSet>
+#include <algorithm>
+#include <netinet/in.h>
 
 namespace {
 QString packetTypeToString(uint16_t type) {
@@ -215,10 +217,81 @@ QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffs
         return QStringLiteral(".");
     return labels.join(QLatin1Char('.'));
 }
+
+QString makeStreamKey(int ipVersion,
+                      quint8 protocol,
+                      const QByteArray &addrA,
+                      quint16 portA,
+                      const QByteArray &addrB,
+                      quint16 portB)
+{
+    return QStringLiteral("%1|%2|%3|%4|%5|%6")
+        .arg(protocol)
+        .arg(ipVersion)
+        .arg(QString::fromLatin1(addrA.toHex().toUpper()))
+        .arg(portA)
+        .arg(QString::fromLatin1(addrB.toHex().toUpper()))
+        .arg(portB);
+}
+
+QString ipBytesToString(const QByteArray &addr, int ipVersion)
+{
+    if (addr.isEmpty())
+        return QStringLiteral("-");
+
+    char buffer[INET6_ADDRSTRLEN] = {0};
+    switch (ipVersion) {
+        case 6:
+            if (addr.size() >= int(sizeof(in6_addr))) {
+                if (inet_ntop(AF_INET6,
+                              reinterpret_cast<const void*>(addr.constData()),
+                              buffer,
+                              sizeof(buffer)))
+                    return QString::fromLatin1(buffer);
+            }
+            break;
+        default:
+            if (addr.size() >= int(sizeof(in_addr))) {
+                if (inet_ntop(AF_INET,
+                              reinterpret_cast<const void*>(addr.constData()),
+                              buffer,
+                              sizeof(buffer)))
+                    return QString::fromLatin1(buffer);
+            }
+            break;
+    }
+    return QStringLiteral("-");
+}
 }
 
 Sniffing::Sniffing() {}
 Sniffing::~Sniffing() {}
+
+QString Sniffing::StreamConversation::protocolName() const
+{
+    switch (protocol) {
+        case IPPROTO_TCP:
+            return QStringLiteral("TCP");
+        case IPPROTO_UDP:
+            return QStringLiteral("UDP");
+        case IPPROTO_SCTP:
+            return QStringLiteral("SCTP");
+        case IPPROTO_UDPLITE:
+            return QStringLiteral("UDPLITE");
+        default:
+            return QStringLiteral("IP%1").arg(protocol);
+    }
+}
+
+QString Sniffing::StreamConversation::label() const
+{
+    return QStringLiteral("%1 %2:%3 ⇄ %4:%5")
+        .arg(protocolName())
+        .arg(endpointA.address)
+        .arg(endpointA.port)
+        .arg(endpointB.address)
+        .arg(endpointB.port);
+}
 
 void Sniffing::packet_callback(u_char *args,
                                const pcap_pkthdr *header,
@@ -230,6 +303,10 @@ void Sniffing::packet_callback(u_char *args,
 
     CapturedPacket captured{raw, worker ? worker->linkType() : DLT_EN10MB};
     Sniffing::appendPacket(captured);
+    Sniffing::recordStreamSegment(raw,
+                                  captured.linkType,
+                                  header->ts.tv_sec,
+                                  header->ts.tv_usec);
 
     QStringList infos;
     infos << QString::number(header->ts.tv_sec)
@@ -2434,6 +2511,197 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
 
 
 
+void Sniffing::recordStreamSegment(const QByteArray &packet,
+                                   int linkType,
+                                   qint64 tsSec,
+                                   qint64 tsUsec)
+{
+    if (packet.isEmpty())
+        return;
+
+    const u_char *pkt = reinterpret_cast<const u_char*>(packet.constData());
+    uint16_t ethertype = ethType(pkt, linkType);
+
+    int ipVersion = 0;
+    QByteArray srcAddr;
+    QByteArray dstAddr;
+    quint16 srcPort = 0;
+    quint16 dstPort = 0;
+    quint8 protocol = 0;
+    const u_char *payloadPtr = nullptr;
+    int payloadLen = 0;
+    bool isTcp = false;
+    quint8 tcpFlags = 0;
+    quint32 sequenceNumber = 0;
+    quint32 acknowledgementNumber = 0;
+    quint16 windowSize = 0;
+
+    if (ethertype == ETHERTYPE_IP) {
+        ipVersion = 4;
+        const sniff_ip *ip = ipv4Hdr(pkt, linkType);
+        if (!ip)
+            return;
+        protocol = ip->ip_p;
+        srcAddr = QByteArray(reinterpret_cast<const char*>(&ip->ip_src), sizeof(ip->ip_src));
+        dstAddr = QByteArray(reinterpret_cast<const char*>(&ip->ip_dst), sizeof(ip->ip_dst));
+    }
+    else if (ethertype == ETHERTYPE_IPV6) {
+        ipVersion = 6;
+        const sniff_ipv6 *ip6 = ipv6Hdr(pkt, linkType);
+        if (!ip6)
+            return;
+        protocol = ip6->ip6_nxt;
+        srcAddr = QByteArray(reinterpret_cast<const char*>(&ip6->ip6_src), sizeof(ip6->ip6_src));
+        dstAddr = QByteArray(reinterpret_cast<const char*>(&ip6->ip6_dst), sizeof(ip6->ip6_dst));
+    }
+    else {
+        return;
+    }
+
+    switch (protocol) {
+        case IPPROTO_TCP: {
+            TcpSegmentView view = tcpSegmentView(pkt, linkType);
+            if (!view.header)
+                return;
+            srcPort = ntohs(view.header->th_sport);
+            dstPort = ntohs(view.header->th_dport);
+            payloadLen = view.payloadLength;
+            if (payloadLen > 0 && view.payload)
+                payloadPtr = view.payload;
+            isTcp = true;
+            tcpFlags = view.header->th_flags;
+            sequenceNumber = ntohl(view.header->th_seq);
+            acknowledgementNumber = ntohl(view.header->th_ack);
+            windowSize = ntohs(view.header->th_win);
+            break;
+        }
+        case IPPROTO_UDP: {
+            UdpDatagramView view = udpDatagramView(pkt, linkType);
+            if (!view.header)
+                return;
+            srcPort = ntohs(view.header->uh_sport);
+            dstPort = ntohs(view.header->uh_dport);
+            payloadLen = view.payloadLength;
+            if (payloadLen > 0 && view.payload)
+                payloadPtr = view.payload;
+            break;
+        }
+        default:
+            return;
+    }
+
+    bool srcFirst = false;
+    if (srcAddr < dstAddr) {
+        srcFirst = true;
+    }
+    else if (srcAddr > dstAddr) {
+        srcFirst = false;
+    }
+    else {
+        srcFirst = srcPort <= dstPort;
+    }
+
+    QByteArray addrA = srcFirst ? srcAddr : dstAddr;
+    QByteArray addrB = srcFirst ? dstAddr : srcAddr;
+    quint16 portA = srcFirst ? srcPort : dstPort;
+    quint16 portB = srcFirst ? dstPort : srcPort;
+    bool fromAtoB = srcFirst;
+    QString key = makeStreamKey(ipVersion, protocol, addrA, portA, addrB, portB);
+
+    if (payloadLen < 0)
+        payloadLen = 0;
+
+    StreamSegment segment;
+    segment.timestampSeconds = tsSec;
+    segment.timestampMicros = tsUsec;
+    segment.payloadLength = payloadLen;
+    segment.frameLength = packet.size();
+    segment.fromAtoB = fromAtoB;
+    segment.isTcp = isTcp;
+    segment.tcpFlags = tcpFlags;
+    segment.sequenceNumber = sequenceNumber;
+    segment.acknowledgementNumber = acknowledgementNumber;
+    segment.windowSize = windowSize;
+    if (payloadLen > 0 && payloadPtr)
+        segment.payload = QByteArray(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+
+    QMutexLocker locker(&streamMutex);
+    StreamConversation &conversation = streamConversations[key];
+    const bool isNewConversation = conversation.segments.isEmpty() && conversation.packetCount == 0;
+    conversation.protocol = protocol;
+    conversation.ipVersion = ipVersion;
+
+    if (isNewConversation) {
+        conversation.endpointA.address = ipBytesToString(addrA, ipVersion);
+        conversation.endpointA.port = portA;
+        conversation.endpointB.address = ipBytesToString(addrB, ipVersion);
+        conversation.endpointB.port = portB;
+        conversation.initiatorIsA = fromAtoB;
+        conversation.firstTimestampSec = tsSec;
+        conversation.firstTimestampUsec = tsUsec;
+    } else {
+        if (conversation.endpointA.address.isEmpty())
+            conversation.endpointA.address = ipBytesToString(addrA, ipVersion);
+        if (conversation.endpointB.address.isEmpty())
+            conversation.endpointB.address = ipBytesToString(addrB, ipVersion);
+    }
+
+    if (conversation.packetCount == 0 ||
+        tsSec < conversation.firstTimestampSec ||
+        (tsSec == conversation.firstTimestampSec && tsUsec < conversation.firstTimestampUsec)) {
+        conversation.firstTimestampSec = tsSec;
+        conversation.firstTimestampUsec = tsUsec;
+    }
+    if (conversation.packetCount == 0 ||
+        tsSec > conversation.lastTimestampSec ||
+        (tsSec == conversation.lastTimestampSec && tsUsec > conversation.lastTimestampUsec)) {
+        conversation.lastTimestampSec = tsSec;
+        conversation.lastTimestampUsec = tsUsec;
+    }
+
+    if (conversation.packetCount == 0)
+        conversation.initiatorIsA = fromAtoB;
+
+    if (fromAtoB) {
+        conversation.totalBytesAToB += segment.payload.size();
+        if (!segment.payload.isEmpty())
+            conversation.aggregatedAToB.append(segment.payload);
+    } else {
+        conversation.totalBytesBToA += segment.payload.size();
+        if (!segment.payload.isEmpty())
+            conversation.aggregatedBToA.append(segment.payload);
+    }
+
+    conversation.segments.append(segment);
+    ++conversation.packetCount;
+}
+
+QVector<Sniffing::StreamConversation> Sniffing::getStreamConversations() const
+{
+    QMutexLocker locker(&streamMutex);
+    QVector<StreamConversation> result;
+    result.reserve(streamConversations.size());
+    for (auto it = streamConversations.constBegin(); it != streamConversations.constEnd(); ++it)
+        result.append(it.value());
+
+    std::sort(result.begin(), result.end(), [](const StreamConversation &lhs,
+                                               const StreamConversation &rhs) {
+        if (lhs.firstTimestampSec == rhs.firstTimestampSec) {
+            if (lhs.firstTimestampUsec == rhs.firstTimestampUsec)
+                return lhs.label() < rhs.label();
+            return lhs.firstTimestampUsec < rhs.firstTimestampUsec;
+        }
+        return lhs.firstTimestampSec < rhs.firstTimestampSec;
+    });
+    return result;
+}
+
+void Sniffing::resetStreams()
+{
+    QMutexLocker locker(&streamMutex);
+    streamConversations.clear();
+}
+
 void Sniffing::saveToPcap(const QString &filePath) {
     QMutexLocker locker(&packetMutex);
     if (packetBuffer.isEmpty())
@@ -2494,6 +2762,7 @@ void Sniffing::openFromPcap(const QString &filePath) {
         QMutexLocker locker(&packetMutex);
         packetBuffer.clear();
     }
+    resetStreams();
 
     const int linkType = pcap_datalink(handle);
 
@@ -2502,6 +2771,7 @@ void Sniffing::openFromPcap(const QString &filePath) {
         if (res == 1) {
             QByteArray pkt(reinterpret_cast<const char*>(raw), header->caplen);
             appendPacket(CapturedPacket{pkt, linkType});
+            recordStreamSegment(pkt, linkType, header->ts.tv_sec, header->ts.tv_usec);
         }
         else if (res == -2) {
             break;
@@ -2519,6 +2789,8 @@ void Sniffing::openFromPcap(const QString &filePath) {
 // here are my sniffing infos
 QVector<CapturedPacket> Sniffing::packetBuffer;
 QMutex Sniffing::packetMutex;
+QHash<QString, Sniffing::StreamConversation> Sniffing::streamConversations;
+QMutex Sniffing::streamMutex;
 
 void Sniffing::appendPacket(const CapturedPacket &packet) {
     QMutexLocker locker(&packetMutex);
@@ -2530,6 +2802,9 @@ const QVector<CapturedPacket>& Sniffing::getAllPackets() {
 }
 
 void Sniffing::clearBuffer() {
-    QMutexLocker locker(&packetMutex);
-    packetBuffer.clear();
+    {
+        QMutexLocker locker(&packetMutex);
+        packetBuffer.clear();
+    }
+    resetStreams();
 }
