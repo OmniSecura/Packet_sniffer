@@ -1,5 +1,6 @@
 #include "PacketTableModel.h"
 
+#include "../packets/sniffing.h"
 #include "../packets/packethelpers.h"
 
 PacketTableModel::PacketTableModel(QObject *parent)
