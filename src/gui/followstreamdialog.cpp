@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QDateTime>
+#include <QTimeZone>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFile>
@@ -333,7 +334,7 @@ QString FollowStreamDialog::buildSegmentBlock(const Sniffing::StreamConversation
             double delta = double(secDiff) + double(usecDiff) / 1'000'000.0;
             timestamp = QStringLiteral("+%1 s").arg(delta, 0, 'f', 6);
         } else {
-            QDateTime dt = QDateTime::fromSecsSinceEpoch(segment.timestampSeconds, Qt::UTC);
+            QDateTime dt = QDateTime::fromSecsSinceEpoch(segment.timestampSeconds, QTimeZone::UTC);
             dt = dt.addMSecs(segment.timestampMicros / 1000.0);
             timestamp = dt.toString(Qt::ISODateWithMs);
         }

@@ -72,6 +72,10 @@ struct ParsedDns {
     quint8 rcode = 0;
     bool authoritative = false;
     bool truncated = false;
+    bool recursionDesired = false;
+    bool recursionAvailable = false;
+    bool authenticatedData = false;
+    bool checkingDisabled = false;
     QVector<DnsQuestion> questions;
     QVector<DnsRecord> answers;
     QVector<DnsRecord> authorities;
