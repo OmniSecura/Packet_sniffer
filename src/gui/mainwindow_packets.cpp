@@ -147,25 +147,6 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, 
                     } else {
                         infoValues << tr("DNS %1").arg(mode);
                     }
-                    const QString idString = QStringLiteral("0x%1").arg(dns.id, 4, 16, QLatin1Char('0')).toUpper();
-                    infoValues << tr("ID %1").arg(idString);
-                    QStringList flagBits;
-                    if (dns.authoritative)
-                        flagBits << QStringLiteral("AA");
-                    if (dns.truncated)
-                        flagBits << QStringLiteral("TC");
-                    if (dns.recursionDesired)
-                        flagBits << QStringLiteral("RD");
-                    if (dns.recursionAvailable)
-                        flagBits << QStringLiteral("RA");
-                    if (dns.authenticatedData)
-                        flagBits << QStringLiteral("AD");
-                    if (dns.checkingDisabled)
-                        flagBits << QStringLiteral("CD");
-                    if (!flagBits.isEmpty())
-                        infoValues << tr("Flags %1").arg(flagBits.join(QLatin1Char('|')));
-                    if (dns.rcode)
-                        infoValues << tr("RCode %1").arg(dns.rcode);
                     infoValues << tr("Q:%1 A:%2").arg(dns.questions.size()).arg(dns.answers.size());
                     if (dns.isResponse && !dns.answers.isEmpty() && !dns.answers.first().data.isEmpty())
                         infoValues << tr("Ans: %1").arg(dns.answers.first().data);
@@ -187,25 +168,6 @@ QStringList MainWindow::infoColumn(const QStringList &parts, const u_char *pkt, 
             } else {
                 infoValues << tr("DNS %1").arg(mode);
             }
-            const QString idString = QStringLiteral("0x%1").arg(dns.id, 4, 16, QLatin1Char('0')).toUpper();
-            infoValues << tr("ID %1").arg(idString);
-            QStringList flagBits;
-            if (dns.authoritative)
-                flagBits << QStringLiteral("AA");
-            if (dns.truncated)
-                flagBits << QStringLiteral("TC");
-            if (dns.recursionDesired)
-                flagBits << QStringLiteral("RD");
-            if (dns.recursionAvailable)
-                flagBits << QStringLiteral("RA");
-            if (dns.authenticatedData)
-                flagBits << QStringLiteral("AD");
-            if (dns.checkingDisabled)
-                flagBits << QStringLiteral("CD");
-            if (!flagBits.isEmpty())
-                infoValues << tr("Flags %1").arg(flagBits.join(QLatin1Char('|')));
-            if (dns.rcode)
-                infoValues << tr("RCode %1").arg(dns.rcode);
             infoValues << tr("Q:%1 A:%2").arg(dns.questions.size()).arg(dns.answers.size());
             if (dns.isResponse && !dns.answers.isEmpty() && !dns.answers.first().data.isEmpty())
                 infoValues << tr("Ans: %1").arg(dns.answers.first().data);

@@ -3,6 +3,7 @@
 #include "src/packetworker.h"
 #include <ctype.h>
 #include <QMutexLocker>
+#include <QBitArray>
 #include <linux/if_packet.h>
 #include <QSet>
 #include <algorithm>
@@ -168,7 +169,7 @@ QString bytesToHex(const uint8_t *data, int len) {
 }
 
 QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffset, int depth = 0) {
-    if (!data || offset >= length) {
+    if (!data || offset < 0 || offset >= length) {
         nextOffset = offset;
         return {};
     }
@@ -178,10 +179,16 @@ QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffs
     bool jumped = false;
     nextOffset = offset;
     const int maxDepth = 8;
+    QBitArray visited(length);
 
     while (pos < length) {
         if (depth > maxDepth)
             break;
+        if (visited.testBit(pos)) {
+            nextOffset = qMax(nextOffset, pos + 1);
+            break;
+        }
+        visited.setBit(pos);
         quint8 len = data[pos];
         if (len == 0) {
             if (!jumped) {
@@ -194,19 +201,21 @@ QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffs
             break;
         }
         if ((len & 0xC0) == 0xC0) {
-            if (pos + 1 >= length)
+            if (pos + 1 >= length) {
+                nextOffset = qMax(nextOffset, pos + 1);
                 break;
+            }
             int ptr = ((len & 0x3F) << 8) | data[pos + 1];
             if (ptr < 0 || ptr >= length) {
                 nextOffset = qMax(nextOffset, pos + 2);
                 break;
             }
-            if (!jumped)
-                nextOffset = pos + 2;
-            if (ptr == pos) {
+            if (visited.testBit(ptr)) {
                 nextOffset = qMax(nextOffset, pos + 2);
                 break;
             }
+            if (!jumped)
+                nextOffset = pos + 2;
             pos = ptr;
             jumped = true;
             ++depth;
@@ -1149,7 +1158,8 @@ ParsedDns Sniffing::parseDns(const u_char *pkt, int linkType) const {
     if (udpView.header && udpView.payloadLength > 0) {
         quint16 sport = ntohs(udpView.header->uh_sport);
         quint16 dport = ntohs(udpView.header->uh_dport);
-        if (!isLikelyDnsPort(sport) && !isLikelyDnsPort(dport) && udpView.payloadLength < int(sizeof(sniff_dns)))
+        bool likelyPort = isLikelyDnsPort(sport) || isLikelyDnsPort(dport);
+        if (!likelyPort)
             return result;
         payload = QByteArray(reinterpret_cast<const char*>(udpView.payload), udpView.payloadLength);
     }
@@ -1159,7 +1169,8 @@ ParsedDns Sniffing::parseDns(const u_char *pkt, int linkType) const {
             return result;
         quint16 sport = ntohs(tcpView.header->th_sport);
         quint16 dport = ntohs(tcpView.header->th_dport);
-        if (!isLikelyDnsPort(sport) && !isLikelyDnsPort(dport) && tcpView.payloadLength < int(sizeof(sniff_dns)) + 2)
+        bool likelyPort = isLikelyDnsPort(sport) || isLikelyDnsPort(dport);
+        if (!likelyPort)
             return result;
         payload = QByteArray(reinterpret_cast<const char*>(tcpView.payload), tcpView.payloadLength);
         fromTcp = true;
