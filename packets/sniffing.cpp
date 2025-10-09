@@ -197,8 +197,16 @@ QString decodeDnsName(const uint8_t *data, int length, int offset, int &nextOffs
             if (pos + 1 >= length)
                 break;
             int ptr = ((len & 0x3F) << 8) | data[pos + 1];
+            if (ptr < 0 || ptr >= length) {
+                nextOffset = qMax(nextOffset, pos + 2);
+                break;
+            }
             if (!jumped)
                 nextOffset = pos + 2;
+            if (ptr == pos) {
+                nextOffset = qMax(nextOffset, pos + 2);
+                break;
+            }
             pos = ptr;
             jumped = true;
             ++depth;
@@ -1187,6 +1195,10 @@ ParsedDns Sniffing::parseDns(const u_char *pkt, int linkType) const {
     result.authoritative = flags & 0x0400;
     result.truncated = flags & 0x0200;
     result.rcode = flags & 0x000F;
+    result.recursionDesired = flags & 0x0100;
+    result.recursionAvailable = flags & 0x0080;
+    result.authenticatedData = flags & 0x0020;
+    result.checkingDisabled = flags & 0x0010;
 
     int qdcount = ntohs(hdr->q_count);
     int ancount = ntohs(hdr->ans_count);
@@ -1775,6 +1787,22 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
                 field.value = dns.truncated ? QStringLiteral("Yes") : QStringLiteral("No");
                 dnsLayer.fields.append(field);
 
+                field.label = QStringLiteral("Recursion desired");
+                field.value = dns.recursionDesired ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Recursion available");
+                field.value = dns.recursionAvailable ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Authenticated data");
+                field.value = dns.authenticatedData ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Checking disabled");
+                field.value = dns.checkingDisabled ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
                 if (dns.rcode) {
                     field.label = QStringLiteral("RCode");
                     field.value = QString::number(dns.rcode);
@@ -2213,6 +2241,22 @@ QVector<PacketLayer> Sniffing::parseLayers(const u_char* pkt, int linkType) cons
 
                 field.label = QStringLiteral("Truncated");
                 field.value = dns.truncated ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Recursion desired");
+                field.value = dns.recursionDesired ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Recursion available");
+                field.value = dns.recursionAvailable ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Authenticated data");
+                field.value = dns.authenticatedData ? QStringLiteral("Yes") : QStringLiteral("No");
+                dnsLayer.fields.append(field);
+
+                field.label = QStringLiteral("Checking disabled");
+                field.value = dns.checkingDisabled ? QStringLiteral("Yes") : QStringLiteral("No");
                 dnsLayer.fields.append(field);
 
                 if (dns.rcode) {

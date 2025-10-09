@@ -393,6 +393,11 @@ void SniffingTest::parseDnsQuery()
     QVERIFY(dns.valid);
     QCOMPARE(dns.id, quint16(0x1a2b));
     QVERIFY(!dns.isResponse);
+    QVERIFY(dns.recursionDesired);
+    QVERIFY(!dns.recursionAvailable);
+    QVERIFY(!dns.truncated);
+    QVERIFY(!dns.authoritative);
+    QCOMPARE(dns.rcode, quint8(0));
     QCOMPARE(dns.questions.size(), 1);
     const auto &question = dns.questions.first();
     QCOMPARE(question.name, QStringLiteral("example.com"));
